@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "Kimera-Byzantium-Synode"
+version = "0.0.1"
+description = "Kimera Byzantium (Synode + Hydra)"
+authors = ["marin <catalin@orson.ro>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+
+
+[tool.kimp]
+extensions = []
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

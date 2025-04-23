@@ -1,0 +1,196 @@
+name: deep-search
+module_class: app.ext.anafin.AnaSynode
+description: a synode for page and component generation
+instructions: do the prompts
+blackboard: default
+run_celery: off
+operators:
+  - alias: FinPPX
+    operator_type: basic
+    operator_path: app.ext.anafin.bots.finPPX.FinPPX
+    handlers: [prompt_one,prompt_two,prompt_three,prompt_four,prompt_five,prompt_six]
+#  - alias: FinGPT
+#    operator_type: bot
+#    operator_path: app.ext.anafin.bots.finGPT.FinGPT
+#    handlers: []
+  - alias: AnaFIN
+    operator_type: basic
+    operator_path: app.ext.anafin.AnaFIN
+    handlers:
+      - finish,start
+    kwargs:
+      constructor:
+        symbols: ["MNPR","RBOT","WGS"]
+synode:
+  - agent: main
+    operator: AnaFIN::start
+    operations:
+      - op_type: map
+        target: forker
+      - op_type: chain_to
+        target: finish
+
+  - agent: forker
+    operator: AnaFIN::dist
+    instructions: |
+      distiribute symbols
+    operations:
+      - op_type: fork_to
+        target:
+          - ppx1
+          - ppx2
+          - ppx3
+          - ppx4
+          - ppx5
+          - ppx6
+
+
+  - agent: ppx1
+    operator: FinPPX::prompt_one
+    instructions: |
+      {Find the top unique, non-duplicate breakthrough innovations that led to the exponential price increase of symbol {$symbol} stock price for the last year.
+      
+      For each innovation, provide:
+          •    Title (max 50 characters)
+          •    Date of first announcement
+          •    Short description (max 200 characters) summarizing the innovation
+          •    Supporting evidence (max 250 characters) with key facts, data, or events confirming its impact on the stock price
+          •    Score (1-100) reflecting the importance of the breakthrough in driving $symbol company’s stock surge
+          •    Correlation to Stock Price Increase: Use TradingView data to validate a measurable stock price impact, providing details on the percentage increase, trading volume spike, or volatility shift after the announcement
+      
+      Additional Requirements:
+          •    Only include innovations that clearly correlate with a price surge (not industry-wide trends or general market sentiment).
+          •    Use TradingView for verification, incorporating stock chart analysis, moving averages, volume trends, and any technical indicators that confirm the innovation’s impact.
+          •    Rank results by date of first announcement and ensure no duplicates.
+          •    Exclude financial factors, earnings surprises, or non-innovation-related events"}
+
+  - agent: ppx2
+    operator: FinPPX::prompt_two
+    instructions: |
+      {Find the top unique, non-duplicate INVESTMENT events directly responsible for significant stock price increases of $symbol for the last year.
+      This may provide information as major institutional buyings, massive share aquisitions, public offering events and also ratings from important analysts. 
+      
+      For each event, provide:
+          •    Title (max 50 characters)
+          •    Date of announcement/event
+          •    Short description (max 200 characters) summarizing the event
+          •    Supporting evidence (max 250 characters) highlighting key facts, figures, or milestones that confirm its impact on the stock price
+          •    Score (1-100) reflecting the event’s significance in driving $symbol stock surge
+          •    Correlation to Stock Price Increase: Verify using TradingView data to demonstrate a measurable impact, detailing the percentage increase, trading volume spike, or volatility changes after the event announcement
+      
+      Additional Requirements:
+          •    Only include events directly tied to price surges (exclude industry-wide trends or general market sentiment).
+          •    Use TradingView for verification, analyzing stock chart patterns, moving averages, trading volume, and relevant technical indicators to confirm the event’s impact.
+          •    Rank results chronologically by the date of announcement/event, ensuring no duplicates.
+          •    Exclude financial disclosures, earnings surprises, partnerships  or unrelated non-investment events.}
+
+  - agent: ppx3
+    operator: FinPPX::prompt_three
+    instructions: |
+      {Find the top unique, non-duplicate PARTNERSHIP announcements that directly led to significant price increases in $symbol stock price for the last year.
+      
+      For each partnership event, provide:
+          •    Title (max 50 characters)
+          •    Date of first public announcement
+          •    Short description (max 200 characters) summarizing the partnership
+          •    Supporting evidence (max 250 characters) highlighting key facts, data, or events validating its impact on stock price
+          •    Score (1-100) reflecting the significance of the partnership in driving $symbol company’s stock surge
+          •    Correlation to Stock Price Increase: Verify impact using TradingView data, detailing the percentage increase, spike in trading volume, or significant volatility shift following the announcement
+      
+      Additional Requirements:
+          •    Only include partnerships clearly correlated with an immediate stock price surge (exclude general market sentiment, broader industry moves, or indirect influences).
+          •    Utilize TradingView for verification, incorporating technical chart analysis, moving averages, volume patterns, and relevant technical indicators to confirm partnership impact.
+          •    Rank results chronologically by announcement date with no duplicates.
+          •    Exclude financial results, earnings surprises, mergers/acquisitions, or other non-partnership-related events.}
+
+
+  - agent: ppx4
+    operator: FinPPX::prompt_four
+    instructions: |
+      {Find the top unique, non-duplicate FINANCIAL RESULTS events that led directly to significant increases in $symbol stock price for the last year.
+      
+      Act as an experienced stock analyst, ensuring each financial result event has a direct, verified correlation with a substantial stock price surge. If only a limited number of relevant events exist (e.g., two or three), do not generate additional results.
+      
+      For each event, provide:
+          •    Event Title (max 50 characters)
+          •    Date of Financial Result Announcement
+          •    Short Description (max 200 characters) summarizing the key financial result or metric driving investor enthusiasm
+          •    Supporting Evidence (max 250 characters) highlighting critical facts, data points, or indicators confirming its direct impact on the stock price
+          •    Impact Score (1-100), indicating the event’s significance in driving the stock price increase
+          •    Correlation to Stock Price Increase: Validate using TradingView data, detailing percentage increase, spike in trading volume, or shifts in volatility following the announcement
+      
+      Additional Requirements:
+          •    Include only financial results events explicitly correlated with a stock price surge (exclude industry-wide trends, market sentiment, general economic factors, or unrelated corporate actions).
+          •    Verify impact using TradingView chart analysis, including moving averages, volume trends, and technical indicators.
+          •    Rank results chronologically by date of announcement, ensuring no duplicates.
+          •    Exclude innovations, product launches, or non-financial-result-related events.}
+
+
+
+
+
+
+  - agent: ppx5
+    operator: FinPPX::prompt_five
+    instructions: |
+      {Find the top unique, non-duplicate FINANCIAL RESULTS events that led directly to significant increases in $symbol stock price for the last year.
+      
+      For each event, provide:
+          •    Event Title (max 50 characters)
+          •    Date of Financial Result Announcement
+          •    Short Description (max 200 characters) summarizing the key financial result or metric driving investor enthusiasm
+          •    Supporting Evidence (max 250 characters) highlighting critical facts, data points, or indicators confirming its direct impact on the stock price
+          •    Impact Score (1-100), indicating the event’s significance in driving the stock price increase
+          •    Correlation to Stock Price Increase: Validate using TradingView data, detailing percentage increase, spike in trading volume, or shifts in volatility following the announcement
+      
+      Additional Requirements:
+          •    Include only financial results events explicitly correlated with a stock price surge (exclude industry-wide trends, market sentiment, general economic factors, or unrelated corporate actions).
+          •    Verify impact using TradingView chart analysis, including moving averages, volume trends, and technical indicators.
+          •    Rank results chronologically by date of announcement, ensuring no duplicates.
+          •    Exclude innovations, product launches, or non-financial-result-related events.}
+  - agent: ppx6
+    operator: FinPPX::prompt_six
+    instructions: |
+      {Find the top unique, non-duplicate merger and acquisition (M&A) events that led to a significant increase in $symbol stock price.
+      
+      Act as an experienced investment analyst, ensuring each identified M&A event has a clear, direct correlation with a measurable stock price surge. Limit results strictly to confirmed M&A events; if only two or three valid events exist, do not generate additional entries.
+      
+      For each M&A event, provide:
+          •    Title (max 50 characters)
+          •    Date of first public announcement
+          •    Short description (max 200 characters) summarizing the M&A event
+          •    Supporting evidence (max 250 characters) with key facts, transaction value, and strategic rationale confirming its impact on the stock price
+          •    Score (1-100) reflecting the importance of the M&A event in driving the stock surge
+          •    Correlation to Stock Price Increase: Use TradingView data to validate a measurable impact, including details on the percentage increase, spike in trading volume, or notable volatility shifts post-announcement
+      
+      Additional Requirements:
+          •    Only include M&A events clearly correlated with stock price surges (excluding broader market movements or general sector sentiment)
+          •    Verify using TradingView, integrating stock chart analysis, moving averages, volume indicators, and other technical signals confirming the M&A event’s impact
+          •    Rank events chronologically by announcement date and ensure uniqueness with no duplicates
+          •    Exclude events related solely to financial results, earnings reports, regulatory filings, or non-M&A-related catalysts."
+      "Find the top unique, non-duplicate rating updates by consultancy companies that led to a significant increase in $symbol stock price.
+      
+      Act as an experienced investment analyst, ensuring each identified rating upgrade or initiation has a clear, direct correlation with a measurable stock price surge. Limit results strictly to confirmed analyst rating changes (e.g., upgrade from Neutral to Buy, new Buy initiation); if only two or three valid instances exist, do not generate additional entries.
+      
+      For each rating update, provide:
+          •    Title (max 50 characters)
+          •    Date of Rating Action
+          •    Short Description (max 200 characters) summarizing the rating change and the analyst/institution behind it
+          •    Supporting Evidence (max 250 characters) detailing the reasoning provided by the analyst(s), such as valuation, growth prospects, or industry tailwinds
+          •    Score (1–100) reflecting the significance of the rating change in driving the stock surge
+          •    Correlation to Stock Price Increase: Use TradingView data to validate a measurable impact, including percentage increase, spike in trading volume, or significant volatility shifts post-announcement
+      
+      Additional Requirements:
+          •    Only include rating updates clearly correlated with stock price surges (exclude broader market rallies or general sector sentiment)
+          •    Verify using TradingView, integrating stock chart analysis, moving averages, volume indicators, and other technical signals to confirm the rating’s impact
+          •    Rank entries chronologically by date of rating action and ensure no duplicates
+          •    Exclude events tied solely to earnings reports, financial results, regulatory filings, or non-rating-related catalysts}
+  
+  
+  
+  
+
+  - agent: finish
+    operator: AnaFIN::finish
+    instructions: |
+      generate_table
