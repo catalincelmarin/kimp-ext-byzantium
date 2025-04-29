@@ -8,26 +8,12 @@ from typing import Dict, Any, Optional
 import yaml
 from kimera.helpers.Helpers import Helpers
 
+from app.ext.byzantium.modules.blackboard.types.SynodeTypeLoader import SynodeTypeLoader
 from app.ext.byzantium.modules.schematics.SynodeConfig import SynodeConfig
 from app.ext.byzantium.modules.Synode import Synode, SynodeImpl
 
-from collections import defaultdict
-
-class SynodeLoader(yaml.SafeLoader):
-    pass
-
-def new_constructor(loader, node):
-    type_str = loader.construct_scalar(node)
-    if type_str == "list":
-        return []
-    elif type_str == "dict":
-        return {}
-    elif type_str == "defaultdict:int":
-        return defaultdict(int)
-    else:
-        raise ValueError(f"Unsupported !new type: {type_str}")
-
-yaml.add_constructor('!new', new_constructor, Loader=SynodeLoader)
+yaml.add_constructor('!let', SynodeTypeLoader.let_constructor, Loader=SynodeTypeLoader)
+yaml.add_constructor('!const', SynodeTypeLoader.const_constructor, Loader=SynodeTypeLoader)
 
 class SynodeFactory:
     _preloaded_configs: Dict[str, Dict[str, Any]] = {}
@@ -61,7 +47,7 @@ class SynodeFactory:
             full_path = yaml_path
 
         with open(full_path, 'r') as file:
-            config = yaml.load(file,Loader=SynodeLoader)
+            config = yaml.load(file,Loader=SynodeTypeLoader)
 
         name_in_config = config.get("name")
         if not name_in_config:

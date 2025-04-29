@@ -30,6 +30,11 @@ class SynodeBlackboard(ABC):
         pass
 
     @abstractmethod
+    def clear(self):
+        """Check if a key exists."""
+        pass
+
+    @abstractmethod
     def remove(self, key: str):
         """Delete a key-value pair."""
         pass

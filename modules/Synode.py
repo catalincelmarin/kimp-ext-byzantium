@@ -2,23 +2,24 @@ import asyncio
 import inspect
 
 import re
+import uuid
 from abc import ABC
-from collections.abc import Callable
-from typing import List, Dict, cast, Optional, Awaitable, Any, final, runtime_checkable, Protocol
+from typing import Dict, cast, Optional, Any, final, runtime_checkable, Protocol
 
 import jmespath
 from kimera.helpers.Helpers import Helpers
+from kimera.openai.gpt.BaseHydra import BaseHydra
 
 from kimera.process.TaskManager import TaskManager
 
-from app.ext.byzantium.modules.SynodeBlackboard import BlackboardHandler
-from app.ext.byzantium.modules.helpers.Helpers import Helpers as SynodeHelpers
+from .blackboard.SynodeBlackboard import BlackboardHandler
+from .helpers.Helpers import Helpers as SynodeHelpers
 from kimera.openai.gpt.BaseGPT import BaseGPT
 from kimera.openai.gpt.BotFactory import BotFactory
 from kimera.openai.gpt.chat import ChatMod
 from kimera.openai.gpt.enums import ContentTypes, Roles
 
-from app.src.bots.dxs.BaseHydra import BaseHydra
+from .helpers.SafeEvaluator import SafeEvaluator
 
 
 @runtime_checkable
@@ -39,7 +40,8 @@ class Synode(ABC):
         from app.ext.byzantium.modules.schematics.SynodeConfig import SynodeConfig
         self.synode: SynodeConfig = config
         if self.synode.blackboard:
-            self._blackboard = self.synode.blackboard()
+            print(self.synode.blackboard)
+            self._blackboard = self.synode.blackboard.blackboard_module(**self.synode.blackboard.kwargs)
         else:
             self._blackboard = None
 
@@ -53,7 +55,25 @@ class Synode(ABC):
         self._loops: Dict[str,int] = {}
         self._hook: Optional[HookCallable] = self.__hook__
         self._task_bucket = []
+        self._evaluator = SafeEvaluator(self._blackboard)
 
+        self._init_blackboard()
+
+    def _init_blackboard(self):
+        """
+        Initializes the blackboard by setting store_key/default_value
+        found in the agents and operations inside self.synode config.
+        """
+        if not self._blackboard:
+            return
+
+        for agent in self.synode.synode:
+            if agent.store_key:
+                self._blackboard.set(agent.store_key, agent.default_value)
+
+            for op in agent.operations:
+                if op.store_key:
+                    self._blackboard.set(op.store_key, op.default_value)
 
     def set_streamer(self,operator_name,streamer):
         op = self._operators.get(operator_name,None)
@@ -82,6 +102,9 @@ class Synode(ABC):
                 print(f"[Cleanup] Unexpected exception: {e}")
         self._task_bucket.clear()
 
+    def _add_operator(self,operator: 'SynodeOperator'):
+        self.synode.operators.append(operator)
+        self._set_operator(operator=operator)
 
     def done_callback(self,task):
         try:
@@ -102,6 +125,7 @@ class Synode(ABC):
             result = await self._run(trigger, use_input=use_input, *args, **kwargs)
 
         await self._clear_task_bucket()
+        self.blackboard.clear()
         return result
 
     @property
@@ -118,47 +142,41 @@ class Synode(ABC):
     def blackboard(self):
         return self._blackboard
 
-    def _eval(self,expression):
+    def _eval(self, expression):
         if not self._blackboard:
             return expression
 
         data = self._blackboard.dump()
 
-        if expression.strip().startswith("{") and expression.strip().endswith("}"):
-            variables = re.findall(r"\$([^\s}]+)", expression)
+        expr = expression.strip()
 
-            resolved = {
-                f"${var}": jmespath.search(var, data)
-                for var in variables
-            }
+        if expr.startswith("{") and expr.endswith("}"):
+            inner = expr[1:-1]
 
-            for var_with_dollar, value in resolved.items():
-                # Convert non-strings to string; quote strings
+            def replace_var(match):
+                var = match.group(1)
+                value = jmespath.search(var, data)
                 if isinstance(value, str):
-                    replacement = f'"{value}"'
-                else:
-                    replacement = str(value)
+                    return f'"{value}"'
+                return str(value)
 
-                # Replace *only* exact matches (not substrings inside words)
-                expression = expression.replace(var_with_dollar, replacement)
+            evaluated = re.sub(r"\$([a-zA-Z0-9_.\[\]]+)", replace_var, inner)
+            return evaluated
 
-            return expression.strip("{}")  # or eval(expression) if you're executing
         elif "$" in expression:
+            return jmespath.search(expression.replace("$", ""), data)
 
-            return jmespath.search(expression.replace("$",""), data)
         else:
             return expression
 
-
-
     def _get_agent(self, agent):
-        use_agent = self._eval(expression=agent)
+        use_agent = self._evaluator.eval(expression=agent)
 
 
         return next((item for item in self.synode.synode if item.agent == use_agent))
 
     @staticmethod
-    async def run_bot(operator: BaseGPT,use_input,handler=None,instructions=None,content_type: ContentTypes = ContentTypes.TEXT):
+    async def run_bot(operator: BaseGPT,use_input,handler=None,instructions=None,content_type: str = "TEXT"):
         async with asyncio.Semaphore(30):
             extra = {}
             Helpers.sysPrint("OPERATOR TIMEOUT",operator.timeout)
@@ -177,7 +195,7 @@ class Synode(ABC):
             # Helpers.sysPrint("INPUT",use_input)
 
             result = await operator.chat([ChatMod(content=use_input,
-                                             content_type=content_type,
+                                             content_type=ContentTypes[content_type].value,
                                              role=Roles.USER)],**extra)
 
 
@@ -185,7 +203,7 @@ class Synode(ABC):
 
     @staticmethod
     async def run_hydra(operator: BaseHydra, use_input, handler=None, instructions=None,
-                      content_type: ContentTypes = ContentTypes.TEXT,*args, **kwargs):
+                      content_type: str = "TEXT",*args, **kwargs):
 
         async with asyncio.Semaphore(30):
             extra = {}
@@ -202,10 +220,14 @@ class Synode(ABC):
 
 
             # Helpers.sysPrint("INPUT", use_input)
+            Helpers.sysPrint("CONTENT_TYPE",content_type)
+            c_type =ContentTypes[content_type].value
 
             result = await use_head.chat(chat=[ChatMod(content=use_input,
-                                                  content_type=content_type,
+                                                  content_type=c_type,
                                                   role=Roles.USER)], **extra)
+
+
             return result.content
 
     @staticmethod
@@ -250,7 +272,9 @@ class Synode(ABC):
             if self._hook:
                self._task_bucket.append(asyncio.create_task(self._hook(self,action="before", agent=agent,data=use_input)))
 
-        parts = agent.operator.split("::")
+        use_operator = self._evaluator.eval(agent.operator.replace("@","\n")).replace("\n","@")
+
+        parts = use_operator.split("::")
         handler = parts[1] if len(parts) > 1 else None
 
         operator = self._operators[parts[0]]
@@ -259,7 +283,7 @@ class Synode(ABC):
         agent_instructions = agent.instructions
 
         if self._blackboard:
-            agent_instructions = self._eval(agent_instructions)
+            agent_instructions = self._evaluator.eval(agent_instructions)
 
         operator.timeout = agent.timeout
         if check_operator.operator_type == OperatorTypes.HYDRA:
@@ -272,16 +296,42 @@ class Synode(ABC):
                     "agent": agent.model_dump(),
                     "handler": handler,
                     "use_input": use_input,
-                    "instructions": agent_instructions
+                    "instructions": agent_instructions,
+                    **agent.kwargs
                 },timeout=agent.timeout + 5)
 
             else:
+
+                Helpers.sysPrint(f"{handler}",agent_instructions)
+
+
                 result = await self.run_hydra(operator=operator,
                                                 handler=handler,
                                                 use_input=use_input,
                                                 instructions=agent_instructions,
                                                 **agent.kwargs
                                                )
+            if isinstance(result,dict) and result.get("sys_prompt",None):
+                from app.ext.byzantium.modules.schematics.SynodeConfig import OperatorHandler
+                new_head = result
+                Helpers.print(result)
+                head_name = new_head.get("head_name",uuid.uuid4().hex[:8])
+                head_kwargs = {
+                    "sys_prompt": f"HEAD NAME: [{head_name}] " + new_head.get("sys_prompt"),
+                    "tools": new_head.get("tools", []),
+                    "description": new_head.get("instructions", "spawned head"),
+                }
+
+                h_handler = OperatorHandler(kwargs=head_kwargs)
+
+                check_operator.handlers[head_name] = h_handler
+                operator.spawn(head_name=new_head.get("head_name"),**h_handler.kwargs)
+
+                result = {
+                    "head_name":head_name,
+                    "instructions": new_head.get("instructions"),
+                }
+
 
         elif check_operator.operator_type == OperatorTypes.SYNOD:
             if not handler:
@@ -333,7 +383,7 @@ class Synode(ABC):
                     "instructions": agent_instructions,
                     "blackboard": BlackboardHandler(
                         handler=self.synode.blackboard.__module__,
-                        data=self._blackboard.dump()
+                        data=self._blackboard.full_dump()
                     ).model_dump()
                 },timeout=agent.timeout)
             else:
@@ -358,7 +408,7 @@ class Synode(ABC):
 
             if op.op_type == SynodeOpType.CHAIN_TO:
                 # Helpers.print(self._blackboard.dump())
-                target = self._get_agent(self._eval(op.target))
+                target = self._get_agent(self._evaluator.eval(op.target))
                 if target:
                     result = await self.run_agent(agent=target, use_input=result)
                 else:
@@ -367,7 +417,7 @@ class Synode(ABC):
                 max_cycles = op.kwargs.get("max_cycles",1)
                 _condition = op.kwargs.get("condition","`true`")
 
-                _condition = self._eval(_condition)
+                _condition = self._evaluator.eval(_condition)
 
                 if agent.agent not in self._loops:
                     self._loops[agent.agent] = 0
@@ -383,6 +433,7 @@ class Synode(ABC):
                 task_list = []
                 for target in op.target:
                     use_target = self._get_agent(target)
+                    Helpers.sysPrint(f"FORK_TO {target}",len(result))
                     task_list.append(asyncio.create_task(self.run_agent(agent=use_target, use_input=result)))
 
                 result = await asyncio.gather(*task_list)
@@ -411,7 +462,8 @@ class Synode(ABC):
 
                 result = accumulate
 
-
+            if self._blackboard and op.store_key:
+                self._blackboard.set(op.store_key, result)
 
             if self._hook:
                self._task_bucket.append(asyncio.create_task(self._hook(self, action="result", operation=op, agent=agent, data=result)))
@@ -430,44 +482,44 @@ class Synode(ABC):
 
         return result
 
-
     def _load_operators(self):
+
+        for operator in self.synode.operators:
+            self._set_operator(operator)
+
+    def _set_operator(self, operator):
         from app.ext.byzantium.modules.SynodeFactory import SynodeFactory
         from app.ext.byzantium.modules.schematics.SynodeConfig import OperatorTypes
 
-        for operator in self.synode.operators:
-            if operator.operator_type == OperatorTypes.HYDRA:
-                hydra = cast(BaseHydra,BotFactory.summon(bot_name=operator.operator_path))
-                for head, definition in operator.handlers.items():
-                    hydra.spawn(head_name=head,**definition.kwargs)
 
-                self._operators[operator.alias] = hydra
 
-            if operator.operator_type == OperatorTypes.BOT:
-                self._operators[operator.alias] = BotFactory.summon(bot_name=operator.operator_path)
+        if operator.operator_type == OperatorTypes.HYDRA:
+            hydra = cast(BaseHydra, BotFactory.summon(bot_name=operator.operator_path))
+            for head, definition in operator.handlers.items():
+                hydra.spawn(head_name=head, **definition.kwargs)
+            self._operators[operator.alias] = hydra
 
-            elif operator.operator_type == OperatorTypes.SYNOD:
-                SynodeFactory.load_config(operator.operator_path, alias=operator.alias)
-                self._operators[operator.alias] = SynodeFactory.summon(operator.alias)
+        elif operator.operator_type == OperatorTypes.BOT:
+            self._operators[operator.alias] = BotFactory.summon(bot_name=operator.operator_path)
 
-            elif operator.operator_type == OperatorTypes.BASIC:
-                klass = SynodeHelpers.get_class(operator.operator_path)
+        elif operator.operator_type == OperatorTypes.SYNOD:
+            SynodeFactory.load_config(operator.operator_path, alias=operator.alias)
+            self._operators[operator.alias] = SynodeFactory.summon(operator.alias)
 
-                try:
-                    _kwargs = operator.kwargs.get("constructor",{})
+        elif operator.operator_type == OperatorTypes.BASIC:
+            klass = SynodeHelpers.get_class(operator.operator_path)
+            try:
+                _kwargs = operator.kwargs.get("constructor", {})
+                signature = inspect.signature(klass.__init__)
+                param_names = [param.name for param in signature.parameters.values() if param.name != 'self']
 
-                    signature = inspect.signature(klass.__init__)
+                if self._blackboard and "blackboard" in param_names:
+                    self._operators[operator.alias] = klass(blackboard=self._blackboard, **_kwargs)
+                else:
+                    self._operators[operator.alias] = klass(**_kwargs)
 
-                    # Extract parameter names, excluding 'self'
-                    param_names = [param.name for param in signature.parameters.values() if param.name != 'self']
-
-                    if self._blackboard and "blackboard" in param_names:
-                        self._operators[operator.alias] = klass(blackboard=self._blackboard, **_kwargs)
-                    else:
-                        self._operators[operator.alias] = klass(**_kwargs)
-
-                except Exception as e:
-                    Helpers.errPrint(e,"Synode.py",171)
+            except Exception as e:
+                Helpers.errPrint(e, "Synode.py", 171)
 
     async def _run(self,trigger="main", use_input=None, instructions=None, *args, **kwargs):
 

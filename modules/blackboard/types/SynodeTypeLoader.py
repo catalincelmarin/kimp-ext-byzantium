@@ -1,0 +1,48 @@
+import yaml
+
+from app.ext.byzantium.modules.blackboard.types.SynodeDict import SynodeDict
+from app.ext.byzantium.modules.blackboard.types.SynodeList import SynodeList
+from app.ext.byzantium.modules.blackboard.types.SynodeSet import SynodeSet
+
+from collections import defaultdict, deque
+
+"""
+    Perpetuals are constants, they escape resets.
+"""
+
+class SynodeTypeLoader(yaml.SafeLoader):
+    @staticmethod
+    def let_constructor(loader, node):
+        """Handles regular dynamic types."""
+        type_str = loader.construct_scalar(node)
+        if type_str == "list":
+            return []
+        elif type_str == "dict":
+            return {}
+        elif type_str == "set":
+            return set()
+        elif type_str == "tuple":
+            return tuple()
+        elif type_str == "defaultdict:int":
+            return defaultdict(int)
+        else:
+            raise ValueError(f"Unsupported !let type: {type_str}")
+
+    @staticmethod
+    def const_constructor(loader, node):
+        """Handles perpetual Synode types."""
+        type_str = loader.construct_scalar(node)
+        if type_str == "list":
+            return SynodeList()
+        elif type_str == "dict":
+            return SynodeDict()
+        elif type_str == "set":
+            return SynodeSet()
+        elif type_str == "queue":
+            return deque()
+        else:
+            raise ValueError(f"Unsupported !const type: {type_str}")
+
+# Register the constructors
+yaml.add_constructor('!let', SynodeTypeLoader.let_constructor, Loader=SynodeTypeLoader)
+yaml.add_constructor('!const', SynodeTypeLoader.const_constructor, Loader=SynodeTypeLoader)

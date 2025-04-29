@@ -1,15 +1,14 @@
 import asyncio
 import inspect
-from typing import Optional, cast
+from typing import cast
 
 from kimera.Bootstrap import Bootstrap
 from kimera.helpers.Helpers import Helpers
 from kimera.openai.gpt.BotFactory import BotFactory
-from kimera.openai.gpt.enums import ContentTypes
 from kimera.process.TaskManager import TaskManager
 
 from app.ext.byzantium.modules.Synode import Synode
-from app.ext.byzantium.modules.SynodeBlackboard import BlackboardHandler
+from app.ext.byzantium.modules.blackboard.SynodeBlackboard import BlackboardHandler
 from app.ext.byzantium.modules.SynodeFactory import SynodeFactory
 from app.ext.byzantium.modules.helpers.Helpers import Helpers as SynodeHelpers
 from app.ext.byzantium.modules.schematics.SynodeConfig import SynodeAgent, Operator
@@ -34,7 +33,7 @@ if tm_app:
             handler: str,
             use_input: str,
             instructions: str,
-            content_type: ContentTypes = ContentTypes.TEXT
+            content_type: str = "TEXT"
     ):
 
         use_operator = Operator(**operator)
@@ -52,7 +51,7 @@ if tm_app:
             handler: str,
             use_input: str,
             instructions: str,
-            content_type: ContentTypes = ContentTypes.TEXT
+            content_type: str = "TEXT"
     ):
 
         use_operator = Operator(**operator)
@@ -60,6 +59,7 @@ if tm_app:
 
         hydra = cast(BaseHydra,BotFactory.summon(bot_name=use_operator.operator_path))
         hydra.timeout = use_agent.timeout
+
         return asyncio.run(Synode.run_hydra(operator=hydra, use_input=use_input, handler=handler, instructions=instructions,
                                           content_type=content_type,**use_agent.kwargs))
 
@@ -101,7 +101,6 @@ if tm_app:
             use_blackboard = SynodeHelpers.get_class(blackboard.handler)
 
             use_blackboard.from_dump(data=blackboard.data)
-
 
         klass = SynodeHelpers.get_class(use_operator.operator_path)
 

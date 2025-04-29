@@ -1,6 +1,6 @@
 from kimera.helpers.Helpers import Helpers
 
-from app.ext.byzantium.modules.SynodeBlackboard import SynodeBlackboard
+from app.ext.byzantium.modules.blackboard.SynodeBlackboard import SynodeBlackboard
 
 
 class Krik:
