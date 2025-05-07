@@ -1,8 +1,8 @@
 import yaml
 
-from app.ext.byzantium.modules.blackboard.types.SynodeDict import SynodeDict
-from app.ext.byzantium.modules.blackboard.types.SynodeList import SynodeList
-from app.ext.byzantium.modules.blackboard.types.SynodeSet import SynodeSet
+from .SynodeDict import SynodeDict
+from .SynodeList import SynodeList
+from .SynodeSet import SynodeSet
 
 from collections import defaultdict, deque
 

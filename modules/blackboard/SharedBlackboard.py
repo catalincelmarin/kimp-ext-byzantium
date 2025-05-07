@@ -1,11 +1,8 @@
-import base64
-import pickle
 import uuid
-
+from kimera.helpers.Helpers import Helpers
 from kimera.store.StoreFactory import StoreFactory
 
-from app.ext.byzantium.modules.blackboard.InMemoryBlackboard import InMemoryBlackboard
-
+from .InMemoryBlackboard import InMemoryBlackboard
 
 
 class SharedBlackboard(InMemoryBlackboard):
@@ -17,26 +14,28 @@ class SharedBlackboard(InMemoryBlackboard):
 
     def __init__(self, namespace, connection_name=None):
         super().__init__()
-        self.cache = StoreFactory.get_mem_store(namespace=namespace + f"::{uuid.uuid4()}", connection_name=connection_name)
+        # Note: each instance has a unique namespace extension
+        self.cache = StoreFactory.get_mem_store(
+            namespace=f"{namespace}",
+            connection_name=connection_name
+        )
 
     def set(self, key: str, value):
-        super().set(key, value)
-        pickled = pickle.dumps(self._store[key])
-        encoded = base64.b64encode(pickled).decode("ascii")  # Base64 => safe string
-        self.cache.set(key, encoded)
+        """
+        Set a value in both local store and MemStore.
+        """
+
+        self.cache.set(key, value)  # MemStore handles pickle + base64
 
     def get(self, key: str):
-        local = super().get(key)
-        if local is not None:
-            return local
+        """
+        Get a value from local store or fallback to MemStore.
+        """
 
         cached = self.cache.get(key)
         if cached is not None:
-            if isinstance(cached, str):
-                cached = base64.b64decode(cached.encode("ascii"))  # Base64 decode
-            value = pickle.loads(cached)
-            self._store[key] = value
-            return value
+            self._store[key] = cached  # cache locally
+            return cached
 
         return None
 
@@ -49,7 +48,7 @@ class SharedBlackboard(InMemoryBlackboard):
 
     def clear(self):
         """
-        Flush both local memory and the MemStore namespace.
+        Flush both local memory and MemStore namespace.
         """
         self.cache.flush()
         self._store.clear()
@@ -57,9 +56,32 @@ class SharedBlackboard(InMemoryBlackboard):
 
     def dump(self) -> dict:
         """
-        Dump the current local memory (no MemStore dump).
+        Dump local + shared keys, avoiding double-decoding.
         """
-        return super().dump()
+        result = dict(self._store)
+
+        try:
+            keys = self.cache.keys()
+        except Exception:
+            keys = []
+
+
+        for key in keys:
+            if isinstance(key, bytes):
+                key = key.decode("utf-8")
+
+            simple_key = key.split(":")[-1]  # remove namespace
+
+
+
+            try:
+                value = self.get(simple_key)
+                if value is not None:
+                    result[simple_key] = value
+            except Exception as e:
+                raise ValueError(f"[SharedBlackboard] Failed to decode key '{simple_key}': {e}")
+
+        return result
 
     @classmethod
     def from_dump(cls, data: dict):

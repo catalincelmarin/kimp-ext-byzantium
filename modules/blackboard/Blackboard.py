@@ -8,7 +8,7 @@ class BlackboardHandler(BaseModel):
     handler: str
     data: Dict[str,Any] = Field(default_factory=dict)
 
-class SynodeBlackboard(ABC):
+class Blackboard(ABC):
     """
     Abstract shared memory space where agents can store and retrieve information.
     Acts as a passive key-value store. No orchestration or logic is executed.

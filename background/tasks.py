@@ -7,17 +7,17 @@ from kimera.helpers.Helpers import Helpers
 from kimera.openai.gpt.BotFactory import BotFactory
 from kimera.process.TaskManager import TaskManager
 
-from app.ext.byzantium.modules.Synode import Synode
-from app.ext.byzantium.modules.blackboard.SynodeBlackboard import BlackboardHandler
-from app.ext.byzantium.modules.SynodeFactory import SynodeFactory
-from app.ext.byzantium.modules.helpers.Helpers import Helpers as SynodeHelpers
-from app.ext.byzantium.modules.schematics.SynodeConfig import SynodeAgent, Operator
+from ..modules.Synode import Synode
+from ..modules.blackboard.Blackboard import BlackboardHandler
+from ..modules.SynodeFactory import SynodeFactory
+from ..modules.helpers.Helpers import Helpers as SynodeHelpers
+from ..modules.schematics.SynodeConfig import SynodeAgent, Operator
 from app.src.bots.dxs.BaseHydra import BaseHydra
 
 boot = Bootstrap()
 tm_app = TaskManager().celery_app
 SynodeFactory(app_path=boot.root_path)
-SynodeFactory.synods_import("app.ext.byzantium.synodes")
+
 
 
 if tm_app:

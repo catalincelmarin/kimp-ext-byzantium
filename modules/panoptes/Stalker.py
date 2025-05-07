@@ -1,35 +1,72 @@
 import asyncio
+import pickle
 import threading
+from abc import abstractmethod
 from multiprocessing import Queue
+from typing import Optional, overload, Any
 
 from kimera.helpers.Helpers import Helpers
 from kimera.process.ThreadKraken import ThreadKraken
 
 from .models import ControlMessage
-
+from ..blackboard.Blackboard import Blackboard
 
 
 class Stalker:
-    def __init__(self, argus, name):
+    def __init__(self, argus, name,running,heartbeat: Optional[float] = 1, inbound=False, outbound=False):
         self.argus = argus
-        self.control_queue = Queue()  # Each stalker owns its private queue
+        self._control_queue = Queue()  # Each stalker owns its private queue
         self.name = name
-        self.inbound = True
-        self.outbound = True
+        self._inbound = inbound
+        self._running = running
+        self._outbound = outbound
+        self._blackboard = self.argus.blackboard
         self._kraken = ThreadKraken()
 
+        self._heartbeat = heartbeat
+
+    @property
+    def running(self):
+        Helpers.sysPrint("GET RUNNING",self._running)
+        return self._running
+
+    @running.setter
+    def running(self,value: bool):
+        Helpers.sysPrint("SET RUNNING", self._running)
+        self._running = value
+
+    @property
+    def heartbeat(self):
+        return self._heartbeat
+
+    @property
+    def control_queue(self):
+        return self._control_queue
+
+    @property
+    def inbound(self):
+        return self._inbound
+
+    @property
+    def outbound(self):
+        return self._outbound
+
+    @property
+    def blackboard(self) -> Blackboard | None:
+        return self._blackboard
+
+    @abstractmethod
     async def patch(self,message: ControlMessage):
-        Helpers.sysPrint("PATCHER",message.model_dump_json())
+        pass
 
     async def dispatch(self,message: ControlMessage):
-        Helpers.print("dispatch")
+
         await self.argus.route_message(message)
 
     async def listen(self):
         """
         The stalker's core work loop — runs inside subprocess.
         """
-
         try:
             msg = await self.check_inbound_queue()
             if msg is not None:
@@ -45,45 +82,46 @@ class Stalker:
         _loop = asyncio.new_event_loop()
 
         async def looper():
-            Helpers.infoPrint(f"{self.name} is listening")
+            #Helpers.infoPrint(f"{self.name} is listening")
             while not stop.is_set():
-                await asyncio.sleep(1)
+                await asyncio.sleep(self._heartbeat)
                 await self.listen()
 
         _loop.run_until_complete(looper())
         _loop.close()
 
+    @abstractmethod
+    async def execute(self):
+        pass
 
     async def stalk(self,*args,**kwargs):
-
+        Helpers.sysPrint("STALKING",self.name)
         if self.inbound:
             self._kraken.register_thread(name=f"fbk_argus", target=self._run_loop)
             self._kraken.start_threads()
 
-        Helpers.sysPrint("INBOUND")
         counter = 1
         while True:
-            await asyncio.sleep(3)
-            Helpers.sysPrint("looping",counter)
-            if counter % 2 == 1:
-                self.whisper(f"HELLO FROM BEHIND THE PROC {counter}")
-            else:
-                self.whisper(f"HELLO FROM BEHIND THE PROC {counter}",to="stalker2")
+            await asyncio.sleep(self._heartbeat)
+            await self.execute()
             counter += 1
 
-
-    def whisper(self,message: str,to="argus"):
-        Helpers.sysPrint(self.name,f"sending {message} to {to}")
+    def whisper(self, message: Any, to="argus"):
+        Helpers.sysPrint(self.name, f"sending {message} to {to}")
         if to == self.name:
-            print("kkt")
             return
-        self.control_queue.put(ControlMessage(origin=self.name,target=to,message=message).model_dump_json())
+        msg = ControlMessage(origin=self.name, target=to, message=message)
+        self.control_queue.put(pickle.dumps(msg))  # ✅ Pickle before putting
 
     async def check_inbound_queue(self):
         if not self.control_queue.empty():
             raw_message = self.control_queue.get()
             try:
-                msg = ControlMessage.model_validate_json(raw_message)
+                msg = pickle.loads(raw_message)  # ✅ Unpickle directly
+
+                if not isinstance(msg, ControlMessage):
+                    raise TypeError("Received object is not a ControlMessage")
+
                 if msg.target == self.name:
                     if msg.message == "STOP":
                         print(f"[{self.name}] Received STOP. Exiting stalker.")
@@ -99,13 +137,14 @@ class Stalker:
         return None
 
     async def check_outbound_queue(self):
-        """
-        Local subprocess queue checking (for STOP or other direct control).
-        """
         if not self.control_queue.empty():
             raw_message = self.control_queue.get()
             try:
-                msg = ControlMessage.model_validate_json(raw_message)
+                msg = pickle.loads(raw_message)  # ✅ Unpickle
+
+                if not isinstance(msg, ControlMessage):
+                    raise TypeError("Invalid message type")
+
                 if msg.target != self.name:
                     return msg
 

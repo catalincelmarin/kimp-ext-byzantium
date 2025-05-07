@@ -1,16 +1,16 @@
 from collections import deque
 from typing import Any
 
-from app.ext.byzantium.modules.blackboard.SynodeBlackboard import SynodeBlackboard
-from app.ext.byzantium.modules.blackboard.types.SynodeDict import SynodeDict
-from app.ext.byzantium.modules.blackboard.types.SynodeList import SynodeList
-from app.ext.byzantium.modules.blackboard.types.SynodeSet import SynodeSet
-from app.ext.byzantium.modules.blackboard.types.SynodeTypeMap import SynodeTypeMap
+from .Blackboard import Blackboard
+from .types.SynodeDict import SynodeDict
+from .types.SynodeList import SynodeList
+from .types.SynodeSet import SynodeSet
+from .types.SynodeTypeMap import SynodeTypeMap
 
 
-class InMemoryBlackboard(SynodeBlackboard):
+class InMemoryBlackboard(Blackboard):
     """
-    Basic dictionary-backed implementation of SynodeBlackboard.
+    Basic dictionary-backed implementation of Blackboard.
     This is not thread-safe — suitable for single-threaded environments or prototyping.
     """
 

@@ -1,16 +1,20 @@
+import asyncio
 import copy
 import importlib
 import os
 import re
+import time
 from pathlib import Path
 from typing import Dict, Any, Optional
 
 import yaml
 from kimera.helpers.Helpers import Helpers
 
-from app.ext.byzantium.modules.blackboard.types.SynodeTypeLoader import SynodeTypeLoader
-from app.ext.byzantium.modules.schematics.SynodeConfig import SynodeConfig
-from app.ext.byzantium.modules.Synode import Synode, SynodeImpl
+from .blackboard.types.SynodeTypeLoader import SynodeTypeLoader
+from .panoptes.Argus import Argus
+from .panoptes.ArgusFactory import ArgusFactory
+from .schematics.SynodeConfig import SynodeConfig
+from .Synode import Synode, SynodeImpl
 
 yaml.add_constructor('!let', SynodeTypeLoader.let_constructor, Loader=SynodeTypeLoader)
 yaml.add_constructor('!const', SynodeTypeLoader.const_constructor, Loader=SynodeTypeLoader)
@@ -73,7 +77,6 @@ class SynodeFactory:
             raise ValueError(f"Provided path '{folder_path}' is not a valid directory.")
 
         for file in full_folder.rglob("synod.*.yaml"):  # Changed to rglob for recursive search
-            print(file)
             match = re.match(r"synod\.(?P<name>\w+)\.yaml", file.name)
             if match:
                 try:
@@ -108,3 +111,76 @@ class SynodeFactory:
 
         synode_config = SynodeConfig.from_config(raw_config, module_class=klass)
         return klass(synode_config)
+
+    @classmethod
+    def summon_argus(cls, synode_obj: Synode, argus_path) -> Argus:
+        """
+        Embed an Argus instance into a Synode.
+        Hooks in the config must point to agent names (strings), not classes.
+        The function for each hook will be dynamically created and passed to use_hook.
+        """
+
+        schema = ArgusFactory.load_schema_from_path(argus_path)
+
+        base_module_path = argus_path  # Example: "app.ext.argus"
+
+        # ✅ Prepare blackboard if defined
+        blackboard_instance = None
+        if schema.blackboard:
+            blackboard_instance = synode_obj.blackboard
+
+        # Load the main Argus class
+        argus_class = ArgusFactory.load_class(f"{schema.module}.{schema.module.split('.')[-1]}")
+
+        # ✅ Pass blackboard into constructor
+        argus_instance = argus_class(
+            name=schema.name,
+            blackboard=blackboard_instance,
+            heartbeat=float(schema.heartbeat)
+        )
+
+        # Register stalkers
+        for stalker_data in schema.stalkers:
+            stalker_module_path = f"{base_module_path}.stalkers.{stalker_data.stalker}"
+            stalker_class_name = stalker_data.stalker
+
+            stalker_class = ArgusFactory.load_class(f"{stalker_module_path}.{stalker_class_name}")
+
+            argus_instance.register_stalker(
+                name=stalker_data.name,
+                stalker_class=stalker_class,
+                heartbeat=float(stalker_data.heartbeat),
+                startup=stalker_data.startup,
+                **stalker_data.kwargs
+            )
+
+        # Register watches
+        if hasattr(schema, "watch"):
+            for watch_entry in schema.watch:
+                argus_instance.use_watch(
+                    key=watch_entry.key,
+                    expression=watch_entry.expression,
+                    default=watch_entry.default
+                )
+
+        # Attach hooks from config
+
+        for hook in schema.hooks:
+            agent = hook.hook  # simple string, not path
+            key_tuple = tuple(hook.keys)
+
+            def make_hook(agent_name):
+
+                time.sleep(5)
+                async def handler(**kwargs):
+
+
+
+                    await synode_obj.launch(trigger=agent_name, use_input=kwargs)
+
+                return handler
+
+            argus_instance.use_hook(list(key_tuple), make_hook(agent_name=agent))
+
+
+        return argus_instance

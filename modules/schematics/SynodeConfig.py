@@ -1,25 +1,15 @@
 from typing import List, Dict, Any, Optional, Union, Type
 
-from kimera.helpers.Helpers import Helpers
-from pydantic import BaseModel, Field, model_validator
-from enum import Enum
+from pydantic import BaseModel, Field, model_validator, PrivateAttr
 
 
-from app.ext.byzantium.modules.Synode import Synode, SynodeImpl
-from app.ext.byzantium.modules.blackboard.InMemoryBlackboard import InMemoryBlackboard
-from app.ext.byzantium.modules.blackboard.SharedBlackboard import SharedBlackboard
-from app.ext.byzantium.modules.helpers.Helpers import Helpers as SynodeHelpers
-from app.ext.byzantium.modules.blackboard.SynodeBlackboard import SynodeBlackboard
+
+from ..Synode import Synode
+from .Enums import SynodeOpType,OperatorTypes
+from ..blackboard.BlackboardSchemas import BlackboardInit
 
 
-# -- Operation Types --
-class SynodeOpType(str, Enum):
-    FORK_TO = 'fork_to'
-    CHAIN_TO = 'chain_to'
-    LOOP_TO = 'loop_to'
-    FILTER = 'filter'
-    MAP = 'map'
-    REDUCE = 'reduce'
+
 
 # -- Operation Representation --
 class SynodeOp(BaseModel):
@@ -45,12 +35,7 @@ class SynodeOp(BaseModel):
         return f"SynodeOp(op_type={self.op_type}, target={self.target}, kwargs={self.kwargs})"
 
 
-class OperatorTypes(str, Enum):
-    BOT = "bot"
-    SYNOD = "synod"
-    BASIC = "basic"
-    HYDRA = "hydra"
-    MORPHEUS = "morpheus"
+
 
 
 class OperatorHandler(BaseModel):
@@ -107,28 +92,6 @@ class SynodReg(BaseModel):
     alias: str
     synod_path: str
 
-class BlackboardInit(BaseModel):
-    blackboard_module: Union[str, Type[SynodeBlackboard]] = Field(..., alias="type")
-    kwargs: Optional[Dict[str, Any]] = Field(default_factory=dict)
-
-
-    @model_validator(mode="before")
-    def resolve_blackboard_module(cls, data: Dict[str, Any]):
-
-        if isinstance(data, dict):
-            module = data.get("type")
-
-            if isinstance(module, str):
-                if module == "default":
-                    data["type"] = InMemoryBlackboard
-                elif module == "shared":
-                    data["type"] = SharedBlackboard
-                else:
-                    raise ValueError(f"Invalid blackboard_module string '{module}': must be 'default' or 'shared'")
-            else:
-                data["type"] = SynodeHelpers.get_class(module)
-        print(data)
-        return data
 
 
 # -- Full SynodeConfig --
@@ -136,6 +99,7 @@ class SynodeConfig(BaseModel):
     name: str
     module_class: Type[Synode]
     blackboard: Optional[BlackboardInit] = None
+    persistent: Optional[bool] = False
     description: str
     instructions: str
     run_async: Optional[bool] = False
@@ -144,21 +108,32 @@ class SynodeConfig(BaseModel):
     operators: List[Operator] = Field(default_factory=list)
     synode: List[SynodeAgent]
 
+    _daemon: bool = PrivateAttr(default=False)
+
+    @property
+    def daemon(self) -> bool:
+        # Insert your logic here for determining persistence
+        return self._daemon
+
     @classmethod
     def from_config(cls, config: Dict[str, Any], module_class: Type[Synode]) -> "SynodeConfig":
+        daemon = False
         try:
             parsed_agents = [cls._parse_agent(agent, config.get("run_async", False)) for agent in config.get("synode", [])]
             for operator in config.get("operators", []):
+                if operator.get("operator_type") == OperatorTypes.ARGUS.value:
+                    daemon = True
                 if operator.get("operator_type") == OperatorTypes.SYNOD.value:
                     pieces = operator.get("operator_path").split(".")
                     if pieces[-1] != "yaml":
                         result = f"synod.{pieces[-1]}.yaml"
                         operator["operator_path"] = "/".join([*pieces[:-1], result])
 
-            return cls(
+            instance = cls(
                 name=config["name"],
                 module_class=module_class,
                 description=config["description"],
+                persistent=config.get("persistent"),
                 async_callback=config.get("async", None),
                 blackboard=config.get("blackboard", None),
                 instructions=config["instructions"],
@@ -167,6 +142,8 @@ class SynodeConfig(BaseModel):
                 operators=config.get("operators", []),
                 synode=parsed_agents
             )
+            instance._daemon = daemon
+            return instance
 
         except Exception as e:
             print("Validation error:", e)
