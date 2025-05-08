@@ -92,6 +92,9 @@ class SafeEvaluator:
             result = expression
             for match in matches:
                 value = SafeEvaluator.interpolate(match, merged_data=_merged_data)
-                result = result.replace(match, str(value), 1)
+                if isinstance(value,str):
+                    result = result.replace(match, str(value), 1)
+                else:
+                    return value
 
             return result

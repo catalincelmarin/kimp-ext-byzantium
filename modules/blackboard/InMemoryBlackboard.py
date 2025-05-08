@@ -6,7 +6,8 @@ from .types.SynodeDict import SynodeDict
 from .types.SynodeList import SynodeList
 from .types.SynodeSet import SynodeSet
 from .types.SynodeTypeMap import SynodeTypeMap
-
+from ..helpers.Helpers import Helpers
+from kimera.helpers.Helpers import Helpers as PrintHelpers
 
 class InMemoryBlackboard(Blackboard):
     """
@@ -21,9 +22,11 @@ class InMemoryBlackboard(Blackboard):
     def get(self, key: str):
         return self._store.get(key, None)
 
-    def set(self, key: str, value: Any):
+    def set_default(self, key: str, value: Any):
+        self._store[key] = value
         self._types[key] = type(value)
 
+    def set(self, key: str, value: Any):
         if self.has(key):
             current_value = self._store[key]
 
@@ -55,6 +58,7 @@ class InMemoryBlackboard(Blackboard):
                 self._store[key] = value
 
         else:
+            self._types[key] = type(value)
             self._store[key] = value
 
     def clear(self):

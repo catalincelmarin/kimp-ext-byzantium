@@ -12,7 +12,7 @@ from collections import defaultdict, deque
 
 class SynodeTypeLoader(yaml.SafeLoader):
     @staticmethod
-    def let_constructor(loader, node):
+    def val_constructor(loader, node):
         """Handles regular dynamic types."""
         type_str = loader.construct_scalar(node)
         if type_str == "list":
@@ -29,7 +29,7 @@ class SynodeTypeLoader(yaml.SafeLoader):
             raise ValueError(f"Unsupported !let type: {type_str}")
 
     @staticmethod
-    def const_constructor(loader, node):
+    def ref_constructor(loader, node):
         """Handles perpetual Synode types."""
         type_str = loader.construct_scalar(node)
         if type_str == "list":
@@ -44,5 +44,5 @@ class SynodeTypeLoader(yaml.SafeLoader):
             raise ValueError(f"Unsupported !const type: {type_str}")
 
 # Register the constructors
-yaml.add_constructor('!let', SynodeTypeLoader.let_constructor, Loader=SynodeTypeLoader)
-yaml.add_constructor('!const', SynodeTypeLoader.const_constructor, Loader=SynodeTypeLoader)
+yaml.add_constructor('!val', SynodeTypeLoader.val_constructor, Loader=SynodeTypeLoader)
+yaml.add_constructor('!ref', SynodeTypeLoader.ref_constructor, Loader=SynodeTypeLoader)

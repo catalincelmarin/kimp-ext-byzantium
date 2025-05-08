@@ -1,7 +1,9 @@
 from typing import Optional
 
+from kimera.openai.gpt.BaseGPT import BaseGPT
+
 from ..blackboard.Blackboard import Blackboard
-from app.src.bots.BaseGPT import BaseGPT
+
 
 
 class SynodeGPT(BaseGPT):

@@ -16,8 +16,7 @@ from .panoptes.ArgusFactory import ArgusFactory
 from .schematics.SynodeConfig import SynodeConfig
 from .Synode import Synode, SynodeImpl
 
-yaml.add_constructor('!let', SynodeTypeLoader.let_constructor, Loader=SynodeTypeLoader)
-yaml.add_constructor('!const', SynodeTypeLoader.const_constructor, Loader=SynodeTypeLoader)
+
 
 class SynodeFactory:
     _preloaded_configs: Dict[str, Dict[str, Any]] = {}

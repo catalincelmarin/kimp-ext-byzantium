@@ -1,10 +1,10 @@
 import asyncio
+import copy
 import inspect
 
 import uuid
 from abc import ABC
 from typing import Dict, cast, Optional, Any, final, runtime_checkable, Protocol
-
 
 from kimera.helpers.Helpers import Helpers
 from kimera.openai.gpt.BaseHydra import BaseHydra
@@ -29,14 +29,15 @@ from .wrappers.SynodeHydra import SynodeHydra
 @runtime_checkable
 class HookCallable(Protocol):
     async def __call__(_,
-                       self: "Synode" ,
+                       self: "Synode",
                        action: str,
                        data: Any,
                        operation: Optional["SynodeOp"] = None,
                        agent: Optional["SynodeAgent"] = None,
                        *args: Any,
                        **kwargs: Any) -> Any:
-            ...
+        ...
+
 
 class Synode(ABC):
 
@@ -56,32 +57,31 @@ class Synode(ABC):
 
         self._async_callback = None
         if self.synode.async_callback:
-            self._async_callback = SynodeHelpers.get_method(self,self.synode.async_callback)
+            self._async_callback = SynodeHelpers.get_method(self, self.synode.async_callback)
 
-        self._operators: Dict[str,Any] = {}
+        self._operators: Dict[str, Any] = {}
         self._load_operators()
         self._main_input = None
-        self._loops: Dict[str,int] = {}
+        self._loops: Dict[str, int] = {}
         self._hook: Optional[HookCallable] = self.__hook__
         self._task_bucket = []
         self._evaluator = SafeEvaluator(self._blackboard)
         self._init_blackboard()
 
-
-    def _init_private_board(self,private_board: InMemoryBlackboard,session=None):
+    def _init_private_board(self, private_board: InMemoryBlackboard, session=None):
         if not session:
             session = {}
 
         for key, value in session.items():
-            private_board.set(key,value)
+            private_board.set(key, value)
 
         for agent in self.synode.synode:
             if agent.store_key and agent.store_key.startswith("_"):
-                private_board.set(agent.store_key, agent.default_value)
+                private_board.set_default(agent.store_key, agent.default_value)
 
             for op in agent.operations:
                 if op.store_key and op.store_key.startswith("_"):
-                    private_board.set(op.store_key,op.default_value)
+                    private_board.set_default(op.store_key, op.default_value)
 
     def _init_blackboard(self):
         """
@@ -101,17 +101,17 @@ class Synode(ABC):
                     use_value = self._blackboard.get(agent.store_key)
                     self._blackboard.set(op.store_key, use_value if use_value is not None else op.default_value)
 
-    def set_streamer(self,operator_name,streamer):
-        op = self._operators.get(operator_name,None)
-        if isinstance(op,BaseGPT) or isinstance(op,BaseHydra):
+    def set_streamer(self, operator_name, streamer):
+        op = self._operators.get(operator_name, None)
+        if isinstance(op, BaseGPT) or isinstance(op, BaseHydra):
             op.streamer = streamer
-            if isinstance(op,BaseHydra):
+            if isinstance(op, BaseHydra):
                 for head in op.heads.values():
                     head.streamer = streamer
         else:
             raise Exception(f"Operator {operator_name} does not support streaming")
 
-    def _get_list_operator(self,alias):
+    def _get_list_operator(self, alias):
         return next((item for item in self.synode.operators if item.alias == alias))
 
     async def _clear_task_bucket(self):
@@ -128,11 +128,11 @@ class Synode(ABC):
                 print(f"[Cleanup] Unexpected exception: {e}")
         self._task_bucket.clear()
 
-    def _add_operator(self,operator: 'SynodeOperator'):
+    def _add_operator(self, operator: 'SynodeOperator'):
         self.synode.operators.append(operator)
         self._set_operator(operator=operator)
 
-    def done_callback(self,task):
+    def done_callback(self, task):
         try:
             result = task.result()
             self._async_callback(result)
@@ -141,42 +141,45 @@ class Synode(ABC):
             print(f"Task failed: {e}")
 
     @final
-    async def launch(self, trigger="main", use_input="",session=None, *args, **kwargs):
+    async def launch(self, trigger="main", use_input="", session=None, *args, **kwargs):
+        if not session:
+            session = {}
 
         private_board = InMemoryBlackboard()
-        if isinstance(session,dict):
-            self._init_private_board(private_board=private_board,session=session)
+        if isinstance(session, dict):
+            self._init_private_board(private_board=private_board, session=session)
 
-        result = await self._run(trigger, use_input=use_input,private_board=private_board, *args, **kwargs)
+        result = await self._run(trigger, use_input=use_input, private_board=private_board, *args, **kwargs)
 
         if not self.synode.persistent and self.blackboard:
-            Helpers.sysPrint("IS NOT PERSISTENT",self.synode.name)
+            Helpers.sysPrint("IS NOT PERSISTENT", self.synode.name)
             self.blackboard.clear()
 
+
         private_board.clear()
+
         del private_board
 
         await self._clear_task_bucket()
         return result
 
     @final
-    def start(self,trigger="main", use_input="",session=None, *args, **kwargs):
+    def start(self, trigger="main", use_input="", session=None, *args, **kwargs):
         if self.synode.daemon:
             try:
                 _loop = asyncio.get_running_loop()
                 # If we're already in a loop, just create and schedule the task
-                _loop.create_task(self.launch(trigger=trigger, use_input="",session=session, *args, **kwargs))
+                _loop.create_task(self.launch(trigger=trigger, use_input="", session=session, *args, **kwargs))
             except RuntimeError:
                 # No loop is running; create one and run the task
                 _loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(_loop)
-                _run_task = _loop.create_task(self.launch(trigger=trigger, use_input="",session=session, *args, **kwargs))
+                _run_task = _loop.create_task(
+                    self.launch(trigger=trigger, use_input="", session=session, *args, **kwargs))
                 _loop.run_forever()
         else:
-            asyncio.run(self.launch(trigger=trigger,use_input="",session=session,*args,**kwargs))
+            asyncio.run(self.launch(trigger=trigger, use_input="", session=session, *args, **kwargs))
             self.blackboard.clear()
-
-
 
     @property
     def hook(self) -> Optional[HookCallable]:
@@ -192,74 +195,66 @@ class Synode(ABC):
     def blackboard(self):
         return self._blackboard
 
-    def _get_agent(self, agent, private_board: Optional[InMemoryBlackboard]=None):
+    def _get_agent(self, agent, private_board: Optional[InMemoryBlackboard] = None, input_dict=None):
         if not private_board:
             private_board = None
 
-        use_agent = self._evaluator.eval(expression=agent,private_board=private_board)
-
+        use_agent = self._evaluator.eval(expression=agent, private_board=private_board, input_dict=input_dict)
 
         return next((item for item in self.synode.synode if item.agent == use_agent))
 
     @staticmethod
-    async def run_bot(operator: BaseGPT,use_input,handler=None,instructions=None,content_type: str = "TEXT",*args,**kwargs):
-        async with asyncio.Semaphore(30):
-            extra = {"session":kwargs.get("session",{})}
+    async def run_bot(operator: BaseGPT, use_input, handler=None, instructions=None,semaphore=30, content_type: str = "TEXT", *args,
+                      **kwargs):
 
-            if instructions:
-                use_input = f"INSTRUCTIONS: {instructions}\n INPUT: {use_input}"
-            if hasattr(operator,"tools") and handler in operator.tools:
-                tool = SynodeHelpers.get_method(operator,handler)
-                extra["call"] = tool
-            elif handler in operator.response_formats:
-                extra["response_format"] = handler
-            elif handler in ["auto","required"]:
-                extra["call"] = handler
-            elif handler == "stream":
-                extra["stream"] = operator.stream
+        extra = {"session": kwargs.get("session", {})}
 
+        if instructions:
+            use_input = f"INSTRUCTIONS: {instructions}\n INPUT: {use_input}"
+        if hasattr(operator, "tools") and handler in operator.tools:
+            tool = SynodeHelpers.get_method(operator, handler)
+            extra["call"] = tool
+        elif handler in operator.response_formats:
+            extra["response_format"] = handler
+        elif handler in ["auto", "required"]:
+            extra["call"] = handler
+        elif handler == "stream":
+            extra["stream"] = operator.stream
 
+        result = await operator.chat([ChatMod(content=use_input,
+                                              content_type=ContentTypes[content_type].value,
+                                              role=Roles.USER)], **extra)
 
-            result = await operator.chat([ChatMod(content=use_input,
-                                             content_type=ContentTypes[content_type].value,
-                                             role=Roles.USER)],**extra)
-
-
-            return result.content
+        return result.content
 
     @staticmethod
     async def run_hydra(operator: BaseHydra, use_input, handler=None, instructions=None,
-                      content_type: str = "TEXT",*args, **kwargs):
+                        content_type: str = "TEXT", *args, **kwargs):
 
-        async with asyncio.Semaphore(30):
+        extra = {"session": kwargs.get("session", {"test": 120})}
+        handler_name, selector = handler.split("@", 1) if "@" in handler else (handler, "auto")
 
+        use_head: BaseGPT = operator.spawn(head_name=handler_name)
 
-            extra = {"session": kwargs.get("session",{"test":120})}
-            handler_name, selector = handler.split("@", 1) if "@" in handler else (handler, "auto")
+        if instructions:
+            use_input = f"INSTRUCTIONS: {instructions}\n INPUT: {use_input}"
+            if selector not in ["stream", "plain"]:
+                Helpers.sysPrint("EXTRA CALL", selector)
+                extra["call"] = selector
+            elif selector == "stream":
+                extra["stream"] = use_head.stream
 
-            use_head: BaseGPT = operator.spawn(head_name=handler_name)
+        c_type = ContentTypes[content_type].value
+        use_head.flush()
+        result = await use_head.chat(chat=[ChatMod(content=use_input,
+                                                   content_type=c_type,
+                                                   role=Roles.USER)], **extra)
 
-            if instructions:
-                use_input = f"INSTRUCTIONS: {instructions}\n INPUT: {use_input}"
-                if selector not in ["stream","plain"]:
-                    Helpers.sysPrint("EXTRA CALL",selector)
-                    extra["call"] = selector
-                elif selector == "stream":
-                    extra["stream"] = use_head.stream
-
-            c_type =ContentTypes[content_type].value
-            use_head.flush()
-            result = await use_head.chat(chat=[ChatMod(content=use_input,
-                                                  content_type=c_type,
-                                                  role=Roles.USER)], **extra)
-
-
-            return result.content
+        return result.content
 
     @staticmethod
-    async def run_synode(operator: 'Synode', handler="main", use_input=None,instructions=None):
-
-        return await operator.launch(trigger=handler,use_input=use_input,instructions=instructions)
+    async def run_synode(operator: 'Synode', handler="main", use_input=None, instructions=None,semaphore=30,*args,**kwargs):
+        return await operator.launch(trigger=handler, use_input=use_input, instructions=instructions)
 
     @staticmethod
     async def run_argus(operator: Argus, handler="main", use_input=None, instructions=None):
@@ -269,7 +264,6 @@ class Synode(ABC):
                 argus = await operator.run()
             elif operator.check_stalker(handler_name) is not None:
 
-
                 if not operator.check_stalker(handler_name):
                     await operator.start_stalker(handler_name)
         elif selector == "stop":
@@ -277,12 +271,12 @@ class Synode(ABC):
                 argus = await operator.shutdown()
             elif operator.check_stalker(handler_name) is not None:
                 if operator.check_stalker(handler_name):
-
                     await operator.stop_stalker(handler_name)
 
         return True
 
-    async def _apply_aop(self,coro: str, use_input, result=None,session: Optional[InMemoryBlackboard] = None,*args,**kwargs):
+    async def _apply_aop(self, coro: str, use_input, result=None, session: Optional[InMemoryBlackboard] = None, *args,
+                         **kwargs):
         pass_session = {}
         if session:
             pass_session = session.dump()
@@ -290,7 +284,8 @@ class Synode(ABC):
         if hasattr(self, coro):
             method = getattr(self, coro)
             if callable(method):
-                result = await method(use_input=use_input,result=result,session=pass_session,*args,**kwargs)  # Call the method
+                result = await method(use_input=use_input, result=result, session=pass_session, *args,
+                                      **kwargs)  # Call the method
                 return result
             else:
                 print(f"Attribute '{method}' exists but is not callable.")
@@ -298,7 +293,7 @@ class Synode(ABC):
             print(f"Method '{coro}' not found on {self.__class__.__name__}.")
 
     @staticmethod
-    async def run_basic(operator,handler: str, use_input, instructions=None, *args, **kwargs):
+    async def run_basic(operator, handler: str, use_input, instructions=None, *args, **kwargs):
         async with asyncio.Semaphore(100):
             if hasattr(operator, handler):
                 method = getattr(operator, handler)
@@ -310,27 +305,30 @@ class Synode(ABC):
             else:
                 print(f"Method '{handler}' not found on {operator.__class__.__name__}.")
 
-    async def run_agent(self, agent: "SynodeAgent", use_input=None, *args, **kwargs):
+    async def run_agent(self, agent: "SynodeAgent", use_input=None,semaphore=None, *args, **kwargs):
+        if semaphore is None:
+            semaphore = agent.semaphore
 
-        from .schematics.SynodeConfig import SynodeOp,SynodeOpType,OperatorTypes
+        from .schematics.SynodeConfig import SynodeOp, SynodeOpType, OperatorTypes
         private_board: Optional[InMemoryBlackboard] = None
 
-        if kwargs.get("private_board",None):
-           private_board: InMemoryBlackboard = kwargs.get("private_board")
+        if kwargs.get("private_board", None):
+            private_board: InMemoryBlackboard = kwargs.get("private_board")
 
         if self._hook:
-           self._task_bucket.append(asyncio.create_task(self._hook(self,action="enter", agent=agent,data=use_input)))
-            
+            self._task_bucket.append(asyncio.create_task(self._hook(self, action="enter", agent=agent, data=use_input)))
 
         if agent.before:
-            use_input = await self._apply_aop(coro=agent.before,use_input=use_input,session=private_board)
+            use_input = await self._apply_aop(coro=agent.before, use_input=use_input, session=private_board)
             if self._hook:
-               self._task_bucket.append(asyncio.create_task(self._hook(self,action="before", agent=agent,data=use_input)))
+                self._task_bucket.append(
+                    asyncio.create_task(self._hook(self, action="before", agent=agent, data=use_input)))
 
-        if isinstance(use_input,Signals):
-                return  use_input
+        if isinstance(use_input, Signals):
+            return use_input
 
-        use_operator = self._evaluator.eval(agent.operator.replace("@","\n"),private_board=private_board).replace("\n","@")
+        use_operator = self._evaluator.eval(agent.operator.replace("@", "\n"), private_board=private_board,
+                                            input_dict=use_input).replace("\n", "@")
 
         parts = use_operator.split("::")
         handler = parts[1] if len(parts) > 1 else None
@@ -341,7 +339,8 @@ class Synode(ABC):
         agent_instructions = agent.instructions
 
         if self._blackboard:
-            agent_instructions = self._evaluator.eval(agent_instructions,private_board=private_board)
+            agent_instructions = self._evaluator.eval(agent_instructions, private_board=private_board,
+                                                      input_dict=use_input)
 
         operator.timeout = agent.timeout
         if check_operator.operator_type == OperatorTypes.HYDRA:
@@ -356,39 +355,39 @@ class Synode(ABC):
                     "use_input": use_input,
                     "instructions": agent_instructions,
                     **agent.kwargs
-                },timeout=agent.timeout + 5)
+                }, timeout=agent.timeout + 5)
 
             else:
-                Helpers.sysPrint("PRIVATE","board")
-                Helpers.print(private_board.dump())
-                result = await self.run_hydra(operator=operator,
-                                                handler=handler,
-                                                use_input=use_input,
-                                                instructions=agent_instructions,
-                                                session=private_board.dump(),
-                                                **agent.kwargs
-                                               )
 
-            if isinstance(result,dict) and result.get("sys_prompt",None):
-                from .schematics.SynodeConfig import OperatorHandler
-                new_head = result
+                async with asyncio.Semaphore(semaphore):
+                    result = await self.run_hydra(operator=operator,
+                                                  handler=handler,
+                                                  use_input=use_input,
+                                                  instructions=agent_instructions,
+                                                  session=private_board.dump(),
+                                                  **agent.kwargs
+                                                  )
 
-                head_name = new_head.get("head_name",uuid.uuid4().hex[:8])
-                head_kwargs = {
-                    "sys_prompt": f"HEAD NAME: [{head_name}] " + new_head.get("sys_prompt"),
-                    "tools": new_head.get("tools", []),
-                    "description": new_head.get("instructions", "spawned head"),
-                }
+                if isinstance(result, dict) and result.get("sys_prompt", None):
+                    from .schematics.SynodeConfig import OperatorHandler
+                    new_head = result
 
-                h_handler = OperatorHandler(kwargs=head_kwargs)
+                    head_name = new_head.get("head_name", uuid.uuid4().hex[:8])
+                    head_kwargs = {
+                        "sys_prompt": f"HEAD NAME: [{head_name}] " + new_head.get("sys_prompt"),
+                        "tools": new_head.get("tools", []),
+                        "description": new_head.get("instructions", "spawned head"),
+                    }
 
-                check_operator.handlers[head_name] = h_handler
-                operator.spawn(head_name=new_head.get("head_name"),**h_handler.kwargs)
+                    h_handler = OperatorHandler(kwargs=head_kwargs)
 
-                result = {
-                    "head_name":head_name,
-                    "instructions": new_head.get("instructions"),
-                }
+                    check_operator.handlers[head_name] = h_handler
+                    operator.spawn(head_name=new_head.get("head_name"), **h_handler.kwargs)
+
+                    result = {
+                        "head_name": head_name,
+                        "instructions": new_head.get("instructions"),
+                    }
 
 
         elif check_operator.operator_type == OperatorTypes.SYNOD:
@@ -402,23 +401,23 @@ class Synode(ABC):
                     "handler": handler,
                     "use_input": use_input,
                     "instructions": agent_instructions
-                },timeout=agent.timeout + 5)
+                }, timeout=agent.timeout + 5)
 
             else:
-                result = await self.run_synode(operator=operator,
-                                                handler=handler,
-                                                use_input=use_input,
-                                                instructions=agent_instructions)
+                async with asyncio.Semaphore(semaphore):
+                    result = await self.run_synode(operator=operator,
+                                                   handler=handler,
+                                                   use_input=use_input,
+                                                   instructions=agent_instructions)
 
         elif check_operator.operator_type == OperatorTypes.ARGUS:
             if not handler:
                 handler = "main"
 
-
             result = await self.run_argus(operator=operator,
-                                            handler=handler,
-                                            use_input=use_input,
-                                            instructions=agent_instructions)
+                                          handler=handler,
+                                          use_input=use_input,
+                                          instructions=agent_instructions)
 
         elif check_operator.operator_type == OperatorTypes.BOT:
 
@@ -430,19 +429,20 @@ class Synode(ABC):
                     "handler": handler,
                     "use_input": use_input,
                     "instructions": agent_instructions
-                },timeout=agent.timeout + 5)
+                }, timeout=agent.timeout + 5)
             else:
-                result = await self.run_bot(operator=operator,
-                                             handler=handler,
-                                             use_input=use_input,
-                                             instructions=agent_instructions,
-                                             session=private_board.dump()
-                                            )
+                async with asyncio.Semaphore(semaphore):
+                    result = await self.run_bot(operator=operator,
+                                                handler=handler,
+                                                use_input=use_input,
+                                                instructions=agent_instructions,
+                                                session=private_board.dump()
+                                                )
 
         elif check_operator.operator_type == OperatorTypes.BASIC:
-            _kwargs = check_operator.kwargs.get(handler,{})
+            _kwargs = check_operator.kwargs.get(handler, {})
             _kwargs["use_input"] = use_input
-            _kwargs = {**_kwargs,**kwargs}
+            _kwargs = {**_kwargs, **kwargs}
             if agent.run_async:
                 result = await TaskManager().send_await(task_name="run_basic", friend='byzantium', kwargs={
                     "operator": check_operator.model_dump(),
@@ -454,78 +454,97 @@ class Synode(ABC):
                         handler=self.synode.blackboard.__module__,
                         data=self._blackboard.full_dump()
                     ).model_dump()
-                },timeout=agent.timeout)
+                }, timeout=agent.timeout)
             else:
-                result = await Synode.run_basic(operator=operator,handler=handler,use_input=_kwargs,instructions=agent_instructions,*args,**kwargs)
+                async with asyncio.Semaphore(semaphore):
+                    result = await Synode.run_basic(operator=operator, handler=handler, use_input=_kwargs,
+                                                    instructions=agent_instructions, *args, **kwargs)
         else:
             raise Exception("Wrong agent config (bot or synode only)")
 
         if self._blackboard and agent.store_key:
             if agent.store_key.startswith("_"):
-                private_board.set(agent.store_key,result)
+                private_board.set(agent.store_key, result)
             else:
-                self._blackboard.set(agent.store_key,result)
-
+                self._blackboard.set(agent.store_key, result)
 
         if self._hook:
-           self._task_bucket.append(asyncio.create_task(self._hook(self, action="output", agent=agent,data=result)))
+            self._task_bucket.append(asyncio.create_task(self._hook(self, action="output", agent=agent, data=result)))
 
-        if isinstance(result,Signals):
-                return  use_input
+        if isinstance(result, Signals):
+            return use_input
 
         for _op in agent.operations:
-            op: SynodeOp = cast(SynodeOp,_op)
+            op: SynodeOp = cast(SynodeOp, _op)
+            semaphore = agent.semaphore if not op.semaphore else op.semaphore
+
             if self._hook:
-               self._task_bucket.append(asyncio.create_task(self._hook(self, action="enter", operation=op, agent=agent, data=result)))
+                self._task_bucket.append(
+                    asyncio.create_task(self._hook(self, action="enter", operation=op, agent=agent, data=result)))
             if op.before:
-                result = await self._apply_aop(coro=op.before, use_input=result,session=private_board)
+                result = await self._apply_aop(coro=op.before, use_input=use_input,result=result, session=private_board)
                 if self._hook:
-                   self._task_bucket.append(asyncio.create_task(self._hook(self, action="before", operation=op, agent=agent, data=result)))
+                    self._task_bucket.append(
+                        asyncio.create_task(self._hook(self, action="before", operation=op, agent=agent, data=result)))
 
             if isinstance(use_input, Signals):
                 return use_input
 
             if op.op_type == SynodeOpType.CHAIN_TO:
-                Helpers.print(private_board.dump())
-                target = self._get_agent(self._evaluator.eval(op.target,private_board=private_board))
+
+                target = self._get_agent(
+                    self._evaluator.eval(op.target, private_board=private_board, input_dict=result))
                 if target:
-                    print({**kwargs,**op.kwargs})
-                    result = await self.run_agent(agent=target, use_input=result, *args, **{**kwargs,**op.kwargs})
+                    print({**kwargs, **op.kwargs})
+
+                    result = await self.run_agent(agent=target, use_input=result,semaphore=semaphore, *args, **{**kwargs, **op.kwargs})
                 else:
                     raise Exception(f"{target} does not exist on {self.synode.name}")
             elif op.op_type == SynodeOpType.LOOP_TO:
-                max_cycles = op.kwargs.get("max_cycles",1)
-                _condition = op.kwargs.get("condition","`true`")
+                max_cycles = op.kwargs.get("max_cycles", 1)
+                _condition = op.kwargs.get("condition", "`true`")
 
-                _condition = self._evaluator.eval(_condition,private_board=private_board)
+                _condition = self._evaluator.eval(_condition, private_board=private_board, input_dict=result)
 
                 if agent.agent not in self._loops:
                     self._loops[agent.agent] = 0
 
                 if self._loops[agent.agent] < max_cycles and _condition:
-                    target = self._get_agent(op.target,private_board=private_board)
+                    target = self._get_agent(op.target, private_board=private_board, input_dict=use_input)
 
                     self._loops[agent.agent] += 1
 
-                    result = await self.run_agent(agent=target, use_input=result, *args, **kwargs)
+                    result = await self.run_agent(agent=target, use_input=result,semaphore=semaphore, *args, **kwargs)
 
             elif op.op_type == SynodeOpType.FORK_TO:
                 task_list = []
-                for target in op.target:
-                    use_target = self._get_agent(target,private_board=private_board)
-
-                    task_list.append(asyncio.create_task(self.run_agent(agent=use_target, use_input=result, *args, **kwargs)))
+                re_target = op.target
+                Helpers.print(result)
+                if isinstance(op.target,str):
+                    re_target = self._evaluator.eval(expression=op.target, private_board=private_board, input_dict=result)
+                Helpers.print({"x":re_target})
+                for target in re_target:
+                    Helpers.sysPrint("TARGET",target)
+                    use_target = self._get_agent(target, private_board=private_board, input_dict=result)
+                    pass_result = result
+                    if not op.kwargs.get("keep_object",False):
+                        pass_result = copy.copy(result)
+                    task_list.append(
+                        asyncio.create_task(self.run_agent(agent=use_target, use_input=pass_result,semaphore=semaphore, *args, **kwargs)))
 
                 result = await asyncio.gather(*task_list)
-            elif op.op_type == SynodeOpType.MAP or op.op_type == SynodeOpType.FILTER:
-                if not isinstance(result,list):
-                    raise Exception("MAP requires an array")
+                if op.kwargs.get("keep_object", False):
+                    result = result[0]
 
+            elif op.op_type == SynodeOpType.MAP or op.op_type == SynodeOpType.FILTER:
+                if not isinstance(result, list):
+                    raise Exception("MAP requires an array")
 
                 task_list = []
                 for part in result:
-                    use_target = self._get_agent(op.target,private_board=private_board)
-                    task_list.append(asyncio.create_task(self.run_agent(agent=use_target, use_input=part, *args, **kwargs)))
+                    use_target = self._get_agent(op.target, private_board=private_board, input_dict=part)
+                    task_list.append(
+                        asyncio.create_task(self.run_agent(agent=use_target, use_input=part, semaphore=semaphore,*args, **kwargs)))
 
                     result = await asyncio.gather(*task_list)
 
@@ -533,12 +552,16 @@ class Synode(ABC):
                     result = [part for part in result if part not in (False, None)]
 
             elif op.op_type == SynodeOpType.REDUCE:
-                if not isinstance(result,list):
+                if not isinstance(result, list):
                     raise Exception("REDUCE requires an array")
                 accumulate = op.kwargs.get("accumulator")
                 for part in result:
-                    use_target = self._get_agent(op.target,private_board=private_board)
-                    accumulate = await self.run_agent(agent=use_target, use_input={"accumulate": accumulate,"item": part}, *args, **kwargs)
+                    use_target = self._get_agent(op.target, private_board=private_board, input_dict=part)
+                    accumulate = await self.run_agent(agent=use_target,
+                                                      use_input={"accumulate": accumulate, "item": part},
+                                                      semaphore=semaphore
+                                                      *args,
+                                                      **kwargs)
 
                 result = accumulate
 
@@ -552,21 +575,24 @@ class Synode(ABC):
                     self._blackboard.set(op.store_key, result)
 
             if self._hook:
-               self._task_bucket.append(asyncio.create_task(self._hook(self, action="result", operation=op, agent=agent, data=result)))
+                self._task_bucket.append(
+                    asyncio.create_task(self._hook(self, action="result", operation=op, agent=agent, data=result)))
             if op.after:
-                result = await self._apply_aop(coro=op.after, use_input=use_input,result=result,session=private_board)
+                result = await self._apply_aop(coro=op.after, use_input=use_input, result=result, session=private_board)
                 if self._hook:
-                   self._task_bucket.append(asyncio.create_task(self._hook(self, action="after", operation=op, agent=agent, data=result)))
+                    self._task_bucket.append(
+                        asyncio.create_task(self._hook(self, action="after", operation=op, agent=agent, data=result)))
 
             if isinstance(result, Signals):
                 return use_input
 
         if self._hook:
-           self._task_bucket.append(asyncio.create_task(self._hook(self, action="exit", agent=agent,data=result)))
+            self._task_bucket.append(asyncio.create_task(self._hook(self, action="exit", agent=agent, data=result)))
         if agent.after:
-            result = await self._apply_aop(coro=agent.after,use_input=use_input,result=result,session=private_board)
+            result = await self._apply_aop(coro=agent.after, use_input=use_input, result=result, session=private_board)
             if self._hook:
-               self._task_bucket.append(asyncio.create_task(self._hook(self, action="after", agent=agent,data=result)))
+                self._task_bucket.append(
+                    asyncio.create_task(self._hook(self, action="after", agent=agent, data=result)))
 
         return result
 
@@ -580,23 +606,26 @@ class Synode(ABC):
         from .schematics.SynodeConfig import OperatorTypes
 
         if operator.operator_type == OperatorTypes.ARGUS:
-            argus = SynodeFactory.summon_argus(self,argus_path=operator.operator_path)
+            argus = SynodeFactory.summon_argus(self, argus_path=operator.operator_path)
 
             self._operators[operator.alias] = argus
 
-
         if operator.operator_type == OperatorTypes.HYDRA:
             hydra = cast(SynodeHydra, BotFactory.summon(bot_name=operator.operator_path))
-            #hydra.blackboard = self.blackboard
+            # hydra.blackboard = self.blackboard
             for head, definition in operator.handlers.items():
-                hydra.spawn(head_name=head, **definition.kwargs)
+                limit_tools = definition.kwargs.get("tools", None)
+                if head == "main" and limit_tools:
 
+                    hydra.tools = {tool: hydra.tools[tool] for tool in hydra.tools if tool in limit_tools }
+                else:
+                    hydra.spawn(head_name=head, **definition.kwargs)
 
             self._operators[operator.alias] = hydra
 
         elif operator.operator_type == OperatorTypes.BOT:
             self._operators[operator.alias] = BotFactory.summon(bot_name=operator.operator_path)
-            #self._operators[operator.alias].blackboard = self._blackboard
+            # self._operators[operator.alias].blackboard = self._blackboard
 
         elif operator.operator_type == OperatorTypes.SYNOD:
             SynodeFactory.load_config(operator.operator_path, alias=operator.alias)
@@ -617,22 +646,22 @@ class Synode(ABC):
             except Exception as e:
                 Helpers.errPrint(e, "Synode.py", 171)
 
-    async def _run(self,trigger="main", use_input=None,private_board=None, instructions=None, *args, **kwargs):
+    async def _run(self, trigger="main", use_input=None, private_board=None, instructions=None, *args, **kwargs):
 
         trigger_agent = next((item for item in self.synode.synode if item.agent == trigger), None)
 
         if trigger_agent:
             if self._hook:
-                await self._hook(self, action="launch", agent=trigger_agent,data=use_input)
+                await self._hook(self, action="launch", agent=trigger_agent, data=use_input)
 
-            data = await self.run_agent(trigger_agent,use_input=use_input,private_board=private_board)
+            data = await self.run_agent(trigger_agent, use_input=use_input, private_board=private_board)
             self._loops = {}
             return data
         else:
             raise Exception(f"Agent {trigger_agent} does not exist")
 
-
-    async def __hook__(_,self: "Synode", action, data, operation: Optional["SynodeOp"] = None, agent: Optional["SynodeAgent"] = None, *args,
+    async def __hook__(_, self: "Synode", action, data, operation: Optional["SynodeOp"] = None,
+                       agent: Optional["SynodeAgent"] = None, *args,
                        **kwargs):
 
         """
@@ -644,7 +673,7 @@ class Synode(ABC):
             !!! this is the reference to current Synode,
         """
         if action == "launch":
-            Helpers.sysPrint("LAUNCHING AGENT",self.synode.name)
+            Helpers.sysPrint("LAUNCHING AGENT", self.synode.name)
         elif operation and agent:
             Helpers.sysPrint("OPERATION", f"{agent.agent}::{action}::{operation.op_type}")
         elif agent:
@@ -653,3 +682,4 @@ class Synode(ABC):
 
 class SynodeImpl(Synode):
     pass
+

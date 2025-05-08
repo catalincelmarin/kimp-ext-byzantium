@@ -16,6 +16,7 @@ class SynodeOp(BaseModel):
     op_type: SynodeOpType
     target: Union[str, List[str]]
     before: Optional[str] = None
+    semaphore: Optional[int] = None
     after: Optional[str] = None
     kwargs: Dict[str, Any] = Field(default_factory=dict)
     store_key: Optional[str] = None
@@ -46,7 +47,6 @@ class OperatorHandler(BaseModel):
 class Operator(BaseModel):
     operator_type: OperatorTypes
     alias: str
-    semaphore: Optional[int] = 30
     operator_path: str
     handlers: Optional[Dict[str, OperatorHandler]] = Field(default_factory=dict)
     kwargs: Optional[Dict[str, Any]] = Field(default_factory=dict)
@@ -64,6 +64,7 @@ class SynodeAgent(BaseModel):
     agent: str
     timeout: Optional[int] = 30
     operator: str
+    semaphore: Optional[int] = 30
     before: Optional[str] = None
     after: Optional[str] = None
     store_key: Optional[str] = None

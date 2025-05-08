@@ -1,7 +1,7 @@
-from pydoc import Helper
 from typing import Optional
 
-from app.src.bots.BaseHydra import BaseHydra
+from kimera.openai.gpt.BaseHydra import BaseHydra
+
 from ..blackboard.Blackboard import Blackboard
 
 
