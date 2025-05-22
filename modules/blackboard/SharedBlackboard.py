@@ -46,13 +46,14 @@ class SharedBlackboard(InMemoryBlackboard):
         super().remove(key)
         self.cache.delete(key)
 
-    def clear(self):
+    def clear(self,delete=True):
         """
         Flush both local memory and MemStore namespace.
         """
         self.cache.flush()
-        self._store.clear()
-        self._types.clear()
+        if delete:
+            self._store.clear()
+            self._types.clear()
 
     def dump(self) -> dict:
         """

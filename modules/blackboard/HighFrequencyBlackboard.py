@@ -1,7 +1,7 @@
 
 from typing import Any
 
-
+from kimera.helpers.Helpers import Helpers
 from kimera.store.StoreFactory import StoreFactory
 from .InMemoryBlackboard import InMemoryBlackboard
 
@@ -15,7 +15,7 @@ class HighFrequencyBlackboard(InMemoryBlackboard):
     def __init__(self, namespace: str, connection_name=None):
         super().__init__()
         self.namespace = namespace
-        self.cache = StoreFactory.get_mem_store(
+        self._store = StoreFactory.get_mem_store(
             namespace=f"hf:{namespace}",
             connection_name=connection_name
         )
@@ -34,7 +34,7 @@ class HighFrequencyBlackboard(InMemoryBlackboard):
 
             if not isinstance(value, dict):
                 use_value = {"__value":value if not isinstance(value,bool) else int(value) }
-            self.cache.hset(self._key(key), mapping=use_value)
+            self._store.hset(key, mapping=use_value)
         except Exception as e:
             print(e)
             print(value)
@@ -44,11 +44,12 @@ class HighFrequencyBlackboard(InMemoryBlackboard):
         """
         Get all fields of the entity stored under `key`.
         """
-        data = self.cache.hgetall(self._key(key))
+        data = self._store.hgetall(key)
+
         if data:
             for key,value in data.items():
-                if isinstance(value,dict) and value.get("__value"):
-                    data[key] =value.get("__value")
+                if key == "__value":
+                    return value
             return data
 
         return None
@@ -57,21 +58,28 @@ class HighFrequencyBlackboard(InMemoryBlackboard):
         """
         Remove all fields (entire hash) for the key.
         """
-        self.cache.delete(self._key(key))
+        self._store.delete(key)
 
-    def clear(self):
+    def clear(self,delete=False):
         """
         Flush all tracked entities under this namespace.
         """
-        keys = self.cache.keys(f"hf:{self.namespace}:*")
-        for key in keys:
-            self.cache.delete(key)
+        Helpers.sysPrint("NAMESPACE TO DELETE",self.namespace)
+        keys = self._store.keys(f"*")
+        for raw_key in keys:
+            key = raw_key.decode() if isinstance(raw_key, bytes) else raw_key
+            logical_key = key.split(":")[-1]
+            self.remove(logical_key)
+            self._types.clear()
+        if delete:
+            pass
+            #self._store.flush()
 
     def dump(self) -> dict:
         """
         Get a snapshot of all tracked entities and their fields.
         """
-        keys = self.cache.keys(f"hf:{self.namespace}:*")
+        keys = self._store.keys(f"*")
         result = {}
         for raw_key in keys:
             key = raw_key.decode() if isinstance(raw_key, bytes) else raw_key
@@ -96,7 +104,7 @@ class HighFrequencyBlackboard(InMemoryBlackboard):
             if not isinstance(value, dict):
                 raise ValueError(
                     f"[HighFrequencyBlackboard.from_dump] Expected dict for key '{key}', got {type(value).__name__}")
-            instance.cache.hset(instance._key(key), mapping=value)
+            instance._store.hset(key, mapping=value)
 
         return instance
 

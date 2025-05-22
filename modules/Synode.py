@@ -41,16 +41,23 @@ class HookCallable(Protocol):
 
 class Synode(ABC):
 
-    def __init__(self, config):
+    def __init__(self, config,persistence_key=None):
         from .schematics.SynodeConfig import SynodeConfig
         self.synode: SynodeConfig = config
         if self.synode.blackboard:
             bb_kwargs = self.synode.blackboard.kwargs
-            if bb_kwargs.get("namespace") and not self.synode.persistent:
-                bb_kwargs["namespace"] += f"::{uuid.uuid4()}"
+            self._persist = None
+            if bb_kwargs.get("namespace"):
+                if not self.synode.persistent:
+                    bb_kwargs["namespace"] += f"::{uuid.uuid4().hex[0:4]}"
+                elif self.synode.persistent:
+                    bb_kwargs["namespace"] += persistence_key
+                    self._persist = persistence_key
 
+            Helpers.sysPrint("BBLOARARD",bb_kwargs)
             self._blackboard = self.synode.blackboard.blackboard_module(**bb_kwargs)
-
+            if self.synode.persistent:
+                self._blackboard.set("blackboard_id",persistence_key)
 
         else:
             self._blackboard = None
@@ -139,6 +146,18 @@ class Synode(ABC):
             print(f"Done with result: {result}")
         except Exception as e:
             print(f"Task failed: {e}")
+
+    @property
+    def persist(self):
+        return self._persist
+
+    @final
+    def dismiss(self,erase=False):
+        if not self._persist or erase:
+            Helpers.sysPrint("clearing",'blackboard')
+            self._blackboard.clear(True)
+
+
 
     @final
     async def launch(self, trigger="main", use_input="", session=None, *args, **kwargs):
@@ -262,6 +281,7 @@ class Synode(ABC):
         if selector == "start":
             if handler_name == "main":
                 argus = await operator.run()
+                Helpers.sysPrint("ARGUS START",argus)
             elif operator.check_stalker(handler_name) is not None:
 
                 if not operator.check_stalker(handler_name):
@@ -305,9 +325,12 @@ class Synode(ABC):
             else:
                 print(f"Method '{handler}' not found on {operator.__class__.__name__}.")
 
-    async def run_agent(self, agent: "SynodeAgent", use_input=None,semaphore=None, *args, **kwargs):
+    async def run_agent(self, agent: "SynodeAgent", use_input=None,semaphore=None,
+                        *args, **kwargs):
         if semaphore is None:
             semaphore = agent.semaphore
+
+
 
         from .schematics.SynodeConfig import SynodeOp, SynodeOpType, OperatorTypes
         private_board: Optional[InMemoryBlackboard] = None
@@ -358,7 +381,6 @@ class Synode(ABC):
                 }, timeout=agent.timeout + 5)
 
             else:
-
                 async with asyncio.Semaphore(semaphore):
                     result = await self.run_hydra(operator=operator,
                                                   handler=handler,
@@ -530,7 +552,8 @@ class Synode(ABC):
                     if not op.kwargs.get("keep_object",False):
                         pass_result = copy.copy(result)
                     task_list.append(
-                        asyncio.create_task(self.run_agent(agent=use_target, use_input=pass_result,semaphore=semaphore, *args, **kwargs)))
+                        asyncio.create_task(self.run_agent(agent=use_target, use_input=pass_result,semaphore=semaphore,
+                                                           *args, **kwargs)))
 
                 result = await asyncio.gather(*task_list)
                 if op.kwargs.get("keep_object", False):
@@ -544,7 +567,8 @@ class Synode(ABC):
                 for part in result:
                     use_target = self._get_agent(op.target, private_board=private_board, input_dict=part)
                     task_list.append(
-                        asyncio.create_task(self.run_agent(agent=use_target, use_input=part, semaphore=semaphore,*args, **kwargs)))
+                        asyncio.create_task(self.run_agent(agent=use_target, use_input=part, semaphore=semaphore,
+                                                           *args, **kwargs)))
 
                     result = await asyncio.gather(*task_list)
 
@@ -559,11 +583,16 @@ class Synode(ABC):
                     use_target = self._get_agent(op.target, private_board=private_board, input_dict=part)
                     accumulate = await self.run_agent(agent=use_target,
                                                       use_input={"accumulate": accumulate, "item": part},
-                                                      semaphore=semaphore
+                                                      semaphore=semaphore,
                                                       *args,
                                                       **kwargs)
 
+                    Helpers.print({
+                        "acc":accumulate
+                    })
+
                 result = accumulate
+
 
             if isinstance(result, Signals):
                 return use_input
@@ -639,6 +668,7 @@ class Synode(ABC):
                 param_names = [param.name for param in signature.parameters.values() if param.name != 'self']
 
                 if self._blackboard and "blackboard" in param_names:
+                    Helpers.sysPrint("BASIC BLACKBOARD",type(self._blackboard).__name__)
                     self._operators[operator.alias] = klass(blackboard=self._blackboard, **_kwargs)
                 else:
                     self._operators[operator.alias] = klass(**_kwargs)

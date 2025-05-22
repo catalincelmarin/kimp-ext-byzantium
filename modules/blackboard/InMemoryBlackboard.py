@@ -61,7 +61,7 @@ class InMemoryBlackboard(Blackboard):
             self._types[key] = type(value)
             self._store[key] = value
 
-    def clear(self):
+    def clear(self, delete=True):
         self._store.clear()
 
     def has(self, key: str) -> bool:

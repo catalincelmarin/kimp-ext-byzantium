@@ -87,7 +87,7 @@ class SynodeFactory:
                 Helpers.warnPrint(f"Skipping {file.name}: filename doesn't match 'synod.[name].yaml' pattern.")
 
     @classmethod
-    def summon(cls, name: str) -> Synode:
+    def _invoke(cls,name):
         if name not in cls._preloaded_configs:
             raise KeyError(f"No preloaded config found for name '{name}'.")
 
@@ -108,8 +108,27 @@ class SynodeFactory:
             except Exception as e:
                 print(f"[WARN] Could not import '{module_path}', falling back to SynodeImpl: {e}")
 
-        synode_config = SynodeConfig.from_config(raw_config, module_class=klass)
-        return klass(synode_config)
+        return klass,raw_config
+
+    @classmethod
+    def persist(cls, name: str,persistence_key=None) -> (Synode,str):
+
+        synode_class, raw_config = cls._invoke(name)
+        synode_config = SynodeConfig.from_config(raw_config, module_class=synode_class)
+        synode = synode_class(synode_config, persistence_key=persistence_key)
+        if not synode.synode.persistent:
+            raise Exception(f"{synode.synode.name} is not persistent. Use summon or set persistent true")
+
+        return synode, synode.persist
+
+
+    @classmethod
+    def summon(cls, name: str) -> Synode:
+
+        synode_class, raw_config = cls._invoke(name)
+        synode_config = SynodeConfig.from_config(raw_config, module_class=synode_class)
+        return synode_class(synode_config,persistence_key=None)
+
 
     @classmethod
     def summon_argus(cls, synode_obj: Synode, argus_path) -> Argus:

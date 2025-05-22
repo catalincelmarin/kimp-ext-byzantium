@@ -30,8 +30,8 @@ class Blackboard(ABC):
         pass
 
     @abstractmethod
-    def clear(self):
-        """Check if a key exists."""
+    def clear(self,delete=True):
+        """clear blackboard"""
         pass
 
     @abstractmethod

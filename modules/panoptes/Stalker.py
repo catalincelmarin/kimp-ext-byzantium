@@ -3,7 +3,7 @@ import pickle
 import threading
 from abc import abstractmethod
 from multiprocessing import Queue
-from typing import Optional, overload, Any
+from typing import Optional, Any
 
 from kimera.helpers.Helpers import Helpers
 from kimera.process.ThreadKraken import ThreadKraken
@@ -94,20 +94,20 @@ class Stalker:
     async def execute(self):
         pass
 
-    async def stalk(self,*args,**kwargs):
+    async def stalk(self,stop: threading.Event=None,*args,**kwargs):
         Helpers.sysPrint("STALKING",self.name)
         if self.inbound:
             self._kraken.register_thread(name=f"fbk_argus", target=self._run_loop)
             self._kraken.start_threads()
 
-        counter = 1
+        Helpers.sysPrint("HEARTBEAT",self._heartbeat)
         while True:
-            await asyncio.sleep(self._heartbeat)
             await self.execute()
-            counter += 1
+            await asyncio.sleep(self._heartbeat)
+
+
 
     def whisper(self, message: Any, to="argus"):
-        Helpers.sysPrint(self.name, f"sending {message} to {to}")
         if to == self.name:
             return
         msg = ControlMessage(origin=self.name, target=to, message=message)
@@ -160,7 +160,7 @@ class Stalker:
         """
         msg = await self.check_outbound_queue()
         if msg:
-            Helpers.sysPrint("PUBLISH",self.name)
+            # Helpers.sysPrint("PUBLISH",self.name)
             try:
                 # Always pass incoming messages to the user-provided async callback
                 await self.dispatch(message=msg)
