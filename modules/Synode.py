@@ -432,6 +432,7 @@ class Synode(ABC):
                                                    use_input=use_input,
                                                    instructions=agent_instructions)
 
+
         elif check_operator.operator_type == OperatorTypes.ARGUS:
             if not handler:
                 handler = "main"
@@ -587,12 +588,10 @@ class Synode(ABC):
                                                       *args,
                                                       **kwargs)
 
-                    Helpers.print({
-                        "acc":accumulate
-                    })
-
                 result = accumulate
 
+
+            Helpers.print({"result":result})
 
             if isinstance(result, Signals):
                 return use_input
