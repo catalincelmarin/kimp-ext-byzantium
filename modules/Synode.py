@@ -240,9 +240,13 @@ class Synode(ABC):
         elif handler == "stream":
             extra["stream"] = operator.stream
 
-        result = await operator.chat([ChatMod(content=use_input,
-                                              content_type=ContentTypes[content_type].value,
-                                              role=Roles.USER)], **extra)
+        try:
+            result = await operator.chat([ChatMod(content=use_input,
+                                                  content_type=ContentTypes[content_type].value,
+                                                  role=Roles.USER)], **extra)
+        except Exception as e:
+            print(e)
+            return {}
 
         return result.content
 
@@ -597,9 +601,6 @@ class Synode(ABC):
                                                       **kwargs)
 
                 result = accumulate
-
-
-            Helpers.print({"result":result})
 
             if isinstance(result, Signals):
                 return use_input
