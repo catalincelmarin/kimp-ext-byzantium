@@ -250,7 +250,7 @@ class Synode(ABC):
     async def run_hydra(operator: BaseHydra, use_input, handler=None, instructions=None,
                         content_type: str = "TEXT", *args, **kwargs):
 
-        extra = {"session": kwargs.get("session", {"test": 120})}
+        extra = {"session": kwargs.get("session", {})}
         handler_name, selector = handler.split("@", 1) if "@" in handler else (handler, "auto")
 
         use_head: BaseGPT = operator.spawn(head_name=handler_name)
@@ -259,12 +259,18 @@ class Synode(ABC):
             use_input = f"INSTRUCTIONS: {instructions}\n INPUT: {use_input}"
             if selector not in ["stream", "plain"]:
                 Helpers.sysPrint("EXTRA CALL", selector)
-                extra["call"] = selector
+                if selector in ["auto","required"]:
+                    extra["call"] = selector
+                else:
+                    extra["call"] = SynodeHelpers.get_method(use_head, selector)
+
             elif selector == "stream":
                 extra["stream"] = use_head.stream
 
+
         c_type = ContentTypes[content_type].value
         use_head.flush()
+
         result = await use_head.chat(chat=[ChatMod(content=use_input,
                                                    content_type=c_type,
                                                    role=Roles.USER)], **extra)
@@ -352,7 +358,7 @@ class Synode(ABC):
 
         use_operator = self._evaluator.eval(agent.operator.replace("@", "\n"), private_board=private_board,
                                             input_dict=use_input).replace("\n", "@")
-
+        Helpers.sysPrint("USE_OPERATOR",use_operator)
         parts = use_operator.split("::")
         handler = parts[1] if len(parts) > 1 else None
 
@@ -542,9 +548,10 @@ class Synode(ABC):
             elif op.op_type == SynodeOpType.FORK_TO:
                 task_list = []
                 re_target = op.target
-                Helpers.print(result)
+
                 if isinstance(op.target,str):
-                    re_target = self._evaluator.eval(expression=op.target, private_board=private_board, input_dict=result)
+                    re_target = self._evaluator.eval(expression=op.target, private_board=private_board, input_dict={'items':result})
+
                 Helpers.print({"x":re_target})
                 for target in re_target:
                     Helpers.sysPrint("TARGET",target)
@@ -567,6 +574,7 @@ class Synode(ABC):
                 task_list = []
                 for part in result:
                     use_target = self._get_agent(op.target, private_board=private_board, input_dict=part)
+                    Helpers.sysPrint("use_target",use_target)
                     task_list.append(
                         asyncio.create_task(self.run_agent(agent=use_target, use_input=part, semaphore=semaphore,
                                                            *args, **kwargs)))

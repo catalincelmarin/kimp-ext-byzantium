@@ -58,8 +58,12 @@ class SafeEvaluator:
             base = self._data.dump() if hasattr(self._data, "dump") else self._data
             _merged_data = {**base, **private_data}
 
+
+
             if isinstance(input_dict,dict):
                 _merged_data = {**_merged_data,"__input": input_dict}
+
+            print(expression)
 
             if expression.startswith("$"):
                 expression = f"({expression})"
