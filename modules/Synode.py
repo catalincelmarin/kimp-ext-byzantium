@@ -274,7 +274,7 @@ class Synode(ABC):
 
         c_type = ContentTypes[content_type].value
         use_head.flush()
-
+        print(use_input)
         result = await use_head.chat(chat=[ChatMod(content=use_input,
                                                    content_type=c_type,
                                                    role=Roles.USER)], **extra)
