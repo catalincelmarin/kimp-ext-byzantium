@@ -16,14 +16,16 @@ from .panoptes.Argus import Argus
 from .blackboard.Blackboard import BlackboardHandler
 from .blackboard.InMemoryBlackboard import InMemoryBlackboard
 from .helpers.Helpers import Helpers as SynodeHelpers
-from kimera.openai.gpt.BaseGPT import BaseGPT
-from kimera.openai.gpt.BotFactory import BotFactory
+
+
 from kimera.openai.gpt.chat import ChatMod
 from kimera.openai.gpt.enums import ContentTypes, Roles
 
 from .helpers.SafeEvaluator import SafeEvaluator
 from .schematics.Enums import Signals
 from .wrappers.SynodeHydra import SynodeHydra
+from kimera.openai.gpt.BaseGPT import BaseGPT
+from kimera.openai.gpt.BotFactory import BotFactory
 
 
 @runtime_checkable
@@ -230,6 +232,8 @@ class Synode(ABC):
 
         if instructions:
             use_input = f"INSTRUCTIONS: {instructions}\n INPUT: {use_input}"
+
+            Helpers.sysPrint("EVALED",instructions)
         if hasattr(operator, "tools") and handler in operator.tools:
             tool = SynodeHelpers.get_method(operator, handler)
             extra["call"] = tool
@@ -274,7 +278,7 @@ class Synode(ABC):
 
         c_type = ContentTypes[content_type].value
         use_head.flush()
-        print(use_input)
+
         result = await use_head.chat(chat=[ChatMod(content=use_input,
                                                    content_type=c_type,
                                                    role=Roles.USER)], **extra)
@@ -464,6 +468,7 @@ class Synode(ABC):
                     "instructions": agent_instructions
                 }, timeout=agent.timeout + 5)
             else:
+
                 async with asyncio.Semaphore(semaphore):
                     result = await self.run_bot(operator=operator,
                                                 handler=handler,
@@ -661,6 +666,7 @@ class Synode(ABC):
             self._operators[operator.alias] = hydra
 
         elif operator.operator_type == OperatorTypes.BOT:
+            print(operator.operator_path)
             self._operators[operator.alias] = BotFactory.summon(bot_name=operator.operator_path)
             # self._operators[operator.alias].blackboard = self._blackboard
 

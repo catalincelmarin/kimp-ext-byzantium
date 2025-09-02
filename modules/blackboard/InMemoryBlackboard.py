@@ -19,8 +19,8 @@ class InMemoryBlackboard(Blackboard):
         self._store = {}
         self._types = {}
 
-    def get(self, key: str):
-        return self._store.get(key, None)
+    def get(self, key: str,default_value=None):
+        return self._store.get(key, default_value)
 
     def set_default(self, key: str, value: Any):
         self._store[key] = value

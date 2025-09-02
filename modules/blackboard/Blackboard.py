@@ -15,7 +15,7 @@ class Blackboard(ABC):
     """
 
     @abstractmethod
-    def get(self, key: str):
+    def get(self, key: str, default_value=None):
         """Retrieve a value by key."""
         pass
 

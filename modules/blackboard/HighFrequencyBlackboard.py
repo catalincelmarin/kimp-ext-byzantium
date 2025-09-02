@@ -40,7 +40,7 @@ class HighFrequencyBlackboard(InMemoryBlackboard):
             print(value)
             raise e
 
-    def get(self, key: str) -> dict | None:
+    def get(self, key: str, default_value=None) -> dict | None:
         """
         Get all fields of the entity stored under `key`.
         """
@@ -52,7 +52,7 @@ class HighFrequencyBlackboard(InMemoryBlackboard):
                     return value
             return data
 
-        return None
+        return default_value
 
     def remove(self, key: str):
         """

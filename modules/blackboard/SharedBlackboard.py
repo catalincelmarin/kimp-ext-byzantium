@@ -27,7 +27,7 @@ class SharedBlackboard(InMemoryBlackboard):
 
         self.cache.set(key, value)  # MemStore handles pickle + base64
 
-    def get(self, key: str):
+    def get(self, key: str, default_value=None):
         """
         Get a value from local store or fallback to MemStore.
         """
@@ -37,7 +37,7 @@ class SharedBlackboard(InMemoryBlackboard):
             self._store[key] = cached  # cache locally
             return cached
 
-        return None
+        return default_value
 
     def remove(self, key: str):
         """

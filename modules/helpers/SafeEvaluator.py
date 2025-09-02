@@ -50,6 +50,7 @@ class SafeEvaluator:
             return expr
 
     def eval(self, expression, private_board: Optional[InMemoryBlackboard],input_dict=None):
+
             if private_board is None:
                 private_data = {}
             else:
@@ -63,7 +64,7 @@ class SafeEvaluator:
             if isinstance(input_dict,dict):
                 _merged_data = {**_merged_data,"__input": input_dict}
 
-            print(expression)
+
 
             if expression.startswith("$"):
                 expression = f"({expression})"
@@ -96,9 +97,11 @@ class SafeEvaluator:
             result = expression
             for match in matches:
                 value = SafeEvaluator.interpolate(match, merged_data=_merged_data)
-                if isinstance(value,str):
-                    result = result.replace(match, str(value), 1)
-                else:
-                    return value
+                #if isinstance(value,str):
+                result = result.replace(match, str(value), 1)
+                # else:
+                #     print(_merged_data)
+                #     Helpers.sysPrint("EVAL VALUE", value)
+                #     return value
 
             return result
