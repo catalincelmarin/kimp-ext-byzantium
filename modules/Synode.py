@@ -7,7 +7,7 @@ from abc import ABC
 from typing import Dict, cast, Optional, Any, final, runtime_checkable, Protocol
 
 from kimera.helpers.Helpers import Helpers
-from kimera.openai.gpt.BaseHydra import BaseHydra
+from app.ext.kimeraai.src.kimllm.gpt.BaseHydra import BaseHydra
 
 from kimera.process.TaskManager import TaskManager
 
@@ -18,14 +18,16 @@ from .blackboard.InMemoryBlackboard import InMemoryBlackboard
 from .helpers.Helpers import Helpers as SynodeHelpers
 
 
-from kimera.openai.gpt.chat import ChatMod
-from kimera.openai.gpt.enums import ContentTypes, Roles
+from app.ext.kimeraai.src.kimllm.gpt.chat import ChatMod
+from app.ext.kimeraai.src.kimllm.gpt.enums import ContentTypes, Roles
 
 from .helpers.SafeEvaluator import SafeEvaluator
 from .schematics.Enums import Signals
 from .wrappers.SynodeHydra import SynodeHydra
-from kimera.openai.gpt.BaseGPT import BaseGPT
-from kimera.openai.gpt.BotFactory import BotFactory
+
+from app.ext.kimeraai.src.kimllm.gpt.BotFactory import BotFactory
+
+from app.ext.kimeraai.src.kimllm.gpt.BaseGPT import BaseGPT
 
 
 @runtime_checkable
