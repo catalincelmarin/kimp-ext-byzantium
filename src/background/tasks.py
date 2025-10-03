@@ -8,11 +8,11 @@ from app.ext.kimeraai.src.kimllm.gpt.BaseHydra import BaseHydra
 from app.ext.kimeraai.src.kimllm.gpt.BotFactory import BotFactory
 from kimera.process.TaskManager import TaskManager
 
-from ..modules.Synode import Synode
-from ..modules.blackboard.Blackboard import BlackboardHandler
-from ..modules.SynodeFactory import SynodeFactory
-from ..modules.helpers.Helpers import Helpers as SynodeHelpers
-from ..modules.schematics.SynodeConfig import SynodeAgent, Operator
+from ..synode.Synode import Synode
+from ..synode.blackboard.Blackboard import BlackboardHandler
+from ..synode.SynodeFactory import SynodeFactory
+from ..synode.helpers.Helpers import Helpers as SynodeHelpers
+from ..synode.schematics.SynodeConfig import SynodeAgent, Operator
 
 
 boot = Bootstrap()

@@ -1,11 +1,18 @@
 [tool.poetry]
-name = "Kimera-Byzantium-Synode"
-version = "0.0.1"
+name = "byzantium"
+version = "1.0.0"
 description = "Kimera Byzantium (Synode + Hydra)"
 authors = ["marin <catalin@orson.ro>"]
 readme = "README.md"
+packages = [
+    { include = "synode", from="src" },
+    { include = "background", from="src" }
+]
+
 
 [tool.poetry.dependencies]
+celery = "*"
+kimeraai = { path = "../kimeraai", develop = false }
 
 
 [tool.kimp]
