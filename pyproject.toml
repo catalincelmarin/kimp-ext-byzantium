@@ -4,6 +4,7 @@ version = "1.0.0"
 description = "Kimera Byzantium (Synode + Hydra)"
 authors = ["marin <catalin@orson.ro>"]
 readme = "README.md"
+package-mode = true
 packages = [
     { include = "synode", from="src" },
     { include = "background", from="src" }
@@ -11,9 +12,8 @@ packages = [
 
 
 [tool.poetry.dependencies]
-celery = "*"
-kimeraai = { path = "../kimeraai", develop = false }
-
+python="^3.12"
+kimeraai = {git = "https://github.com/catalincelmarin/kimp-ext-kimeraai.git", branch="provisional" }
 
 [tool.kimp]
 extensions = []
