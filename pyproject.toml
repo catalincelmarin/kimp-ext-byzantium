@@ -13,7 +13,12 @@ packages = [
 
 [tool.poetry.dependencies]
 python="^3.12"
-kimeraai = {git = "https://github.com/catalincelmarin/kimp-ext-kimeraai.git", branch="provisional" }
+jmespath = "^1.0.1"
+
+# kimeraai = {git = "../kimeraai", develop=false }
+kimeraai = {git = "https://github.com/catalincelmarin/kimp-ext-kimeraai.git", tag="v1.0.0" }
+
+
 
 [tool.kimp]
 extensions = []
