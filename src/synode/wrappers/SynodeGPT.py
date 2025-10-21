@@ -1,6 +1,6 @@
 from typing import Optional
 
-from app.ext.kimeraai.src.kimllm.gpt.BaseGPT import BaseGPT
+from kimllm.gpt.BaseGPT import BaseGPT
 
 from ..blackboard.Blackboard import Blackboard
 

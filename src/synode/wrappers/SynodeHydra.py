@@ -1,6 +1,6 @@
 from typing import Optional
 
-from app.ext.kimeraai.src.kimllm.gpt.BaseHydra import BaseHydra
+from kimllm.gpt.BaseHydra import BaseHydra
 
 from ..blackboard.Blackboard import Blackboard
 

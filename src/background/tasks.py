@@ -4,8 +4,8 @@ from typing import cast
 
 from kimera.Bootstrap import Bootstrap
 from kimera.helpers.Helpers import Helpers
-from app.ext.kimeraai.src.kimllm.gpt.BaseHydra import BaseHydra
-from app.ext.kimeraai.src.kimllm.gpt.BotFactory import BotFactory
+from kimllm.gpt.BaseHydra import BaseHydra
+from kimllm.gpt.BotFactory import BotFactory
 from kimera.process.TaskManager import TaskManager
 
 from ..synode.Synode import Synode
